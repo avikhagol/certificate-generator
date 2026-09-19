@@ -2,6 +2,11 @@
   "use strict";
 
   const DESIGN = { width: 1200, height: 848 };
+  const QUALITY_PRESETS = {
+    normal: { label: "Normal", scale: 1, dpi: 100, jpegQuality: 0.92 },
+    high: { label: "High", scale: 2, dpi: 200, jpegQuality: 0.97 },
+    xhigh: { label: "XHigh", scale: 3, dpi: 300, jpegQuality: 1 }
+  };
   const sampleRecords = [
     { name: "Avinash Kumar", course: "Discover Camp", date: "19 September 2026", organization: "RAD@home India" },
     { name: "Lorem Ipsum", course: "Discover Camp", date: "19 September 2026", organization: "RAD@home India" },
@@ -28,6 +33,7 @@
     selectedField: "name",
     backgroundImage: null,
     backgroundName: "Sample template",
+    exportQuality: "xhigh",
     customFonts: [],
     scale: 1,
     interaction: null
@@ -42,7 +48,7 @@
     fieldList: $("fieldList"), addField: $("addFieldButton"), deleteField: $("deleteFieldButton"),
     fieldForm: $("fieldForm"), fieldText: $("fieldText"), fieldFont: $("fieldFont"), fontStatus: $("fontStatus"), fieldSize: $("fieldSize"), fieldWeight: $("fieldWeight"), fieldColor: $("fieldColor"), fieldColorText: $("fieldColorText"),
     fieldX: $("fieldX"), fieldY: $("fieldY"), fieldWidth: $("fieldWidth"), alignment: $("alignmentControl"),
-    zoomLabel: $("zoomLabel"), exportSummary: $("exportSummary"), reset: $("resetButton"), downloadPng: $("downloadPngButton"), downloadPdf: $("downloadPdfButton"), batch: $("batchButton"),
+    zoomLabel: $("zoomLabel"), exportQuality: $("exportQuality"), exportSummary: $("exportSummary"), reset: $("resetButton"), downloadPng: $("downloadPngButton"), downloadPdf: $("downloadPdfButton"), batch: $("batchButton"),
     toast: $("toast"), progress: $("progressOverlay"), progressTitle: $("progressTitle"), progressText: $("progressText"), progressBar: $("progressBar")
   };
 
@@ -146,7 +152,9 @@
     const count = state.records.length;
     els.recordCount.textContent = `${count} ${count === 1 ? "record" : "records"}`;
     els.recordPosition.textContent = `${state.currentRecord + 1} / ${count}`;
-    els.exportSummary.textContent = `${count} ${count === 1 ? "certificate" : "certificates"} · PNG + PDF`;
+    const preset = currentQualityPreset();
+    const dimensions = `${DESIGN.width * preset.scale} × ${DESIGN.height * preset.scale}`;
+    els.exportSummary.textContent = `${count} ${count === 1 ? "certificate" : "certificates"} · ${preset.label} · ${dimensions}`;
     els.recordSelect.replaceChildren(...state.records.map((record, index) => {
       const option = document.createElement("option");
       option.value = index;
@@ -448,10 +456,14 @@
     renderFields(); renderFieldList(); populateForm();
   }
 
-  function renderCertificate(record) {
+  function renderCertificate(record, scale = 1) {
     const canvas = document.createElement("canvas");
-    canvas.width = DESIGN.width; canvas.height = DESIGN.height;
+    canvas.width = Math.round(DESIGN.width * scale);
+    canvas.height = Math.round(DESIGN.height * scale);
     const ctx = canvas.getContext("2d");
+    ctx.scale(scale, scale);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
     drawBackground(ctx);
     ctx.textBaseline = "top";
     state.fields.forEach((item) => drawTextField(ctx, item, resolveText(item.text, record)));
@@ -505,7 +517,8 @@
   async function downloadCurrentPng() {
     await ensureFontsReady();
     const record = state.records[state.currentRecord];
-    const blob = await canvasToBlob(renderCertificate(record));
+    const preset = currentQualityPreset();
+    const blob = await canvasToBlob(renderCertificate(record, preset.scale));
     downloadBlob(blob, `${safeFilename(record, state.currentRecord)}.png`);
     showToast("PNG downloaded");
   }
@@ -513,13 +526,14 @@
   async function downloadCurrentPdf() {
     await ensureFontsReady();
     const record = state.records[state.currentRecord];
-    const bytes = await makePdf(renderCertificate(record));
+    const preset = currentQualityPreset();
+    const bytes = await makePdf(renderCertificate(record, preset.scale), preset.jpegQuality);
     downloadBlob(new Blob([bytes], { type: "application/pdf" }), `${safeFilename(record, state.currentRecord)}.pdf`);
     showToast("PDF downloaded");
   }
 
-  async function makePdf(canvas) {
-    const jpegBlob = await canvasToBlob(canvas, "image/jpeg", 0.94);
+  async function makePdf(canvas, jpegQuality = 1) {
+    const jpegBlob = await canvasToBlob(canvas, "image/jpeg", jpegQuality);
     const jpeg = new Uint8Array(await jpegBlob.arrayBuffer());
     const encoder = new TextEncoder();
     const chunks = [];
@@ -550,14 +564,15 @@
     setBusy(true);
     try {
       await ensureFontsReady();
+      const preset = currentQualityPreset();
       const files = [];
       for (let i = 0; i < state.records.length; i++) {
         const record = state.records[i];
-        const canvas = renderCertificate(record);
+        const canvas = renderCertificate(record, preset.scale);
         const base = `${String(i + 1).padStart(3, "0")}-${safeFilename(record, i)}`;
         setProgress(i, state.records.length, `Rendering ${base}`);
         const png = new Uint8Array(await (await canvasToBlob(canvas)).arrayBuffer());
-        const pdf = await makePdf(canvas);
+        const pdf = await makePdf(canvas, preset.jpegQuality);
         files.push({ name: `png/${base}.png`, data: png }, { name: `pdf/${base}.pdf`, data: pdf });
         await new Promise((resolve) => setTimeout(resolve, 0));
       }
@@ -574,6 +589,10 @@
   async function ensureFontsReady() {
     await document.fonts.ready;
     await Promise.all(state.fields.map((item) => document.fonts.load(`${item.weight} ${item.size}px "${item.font}"`)));
+  }
+
+  function currentQualityPreset() {
+    return QUALITY_PRESETS[state.exportQuality] || QUALITY_PRESETS.xhigh;
   }
 
   function setBusy(busy) {
@@ -648,6 +667,12 @@
   els.dataUpload.addEventListener("change", handleDataUpload);
   els.backgroundUpload.addEventListener("change", handleBackgroundUpload);
   els.fontUpload.addEventListener("change", handleFontUpload);
+  els.exportQuality.addEventListener("change", (event) => {
+    state.exportQuality = event.target.value;
+    const preset = currentQualityPreset();
+    renderData();
+    showToast(`${preset.label} export selected · about ${preset.dpi} DPI`);
+  });
   els.clearBackground.addEventListener("click", () => { state.backgroundImage = null; state.backgroundName = "Sample template"; drawBackground(bgCtx); showToast("Sample template restored"); });
   els.recordSelect.addEventListener("change", () => { state.currentRecord = Number(els.recordSelect.value); renderData(); renderFields(); });
   els.previousRecord.addEventListener("click", () => { state.currentRecord = (state.currentRecord - 1 + state.records.length) % state.records.length; renderData(); renderFields(); });

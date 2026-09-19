@@ -13,8 +13,8 @@ No recipient data or uploaded artwork leaves the browser. The app has no backend
 - Local custom font uploads (`.ttf`, `.otf`, `.woff`, and `.woff2`)
 - Drag, resize, nudge, style, align, add, and delete text layers
 - Live preview for every record
-- Individual PNG and landscape A4 PDF export
-- Batch ZIP with a PNG and PDF folder
+- Selectable Normal, High, and XHigh PNG and landscape A4 PDF export quality
+- Batch ZIP with high-resolution PNG and PDF folders
 - Responsive interface with sample data and a built-in template
 
 ## Data format
@@ -36,6 +36,18 @@ For a simple list, use a `.txt` file with one name per line. This creates a sing
 Select a text layer, then choose **+ Custom** beside the Font menu. Uploaded TTF, OTF, WOFF, and WOFF2 files are loaded only in the current browser session and are immediately available in the live preview and every export. Font files are never uploaded to a server.
 
 Custom fonts must be reselected after reloading the page. Ensure that the font's license permits use in generated certificates.
+
+## Export quality
+
+Choose a quality preset in the top toolbar before downloading:
+
+| Preset | Render size | Approximate A4 DPI | Best for |
+| --- | --- | --- | --- |
+| Normal | 1200 × 848 | 100 DPI | Quick drafts and screen sharing |
+| High | 2400 × 1696 | 200 DPI | Everyday digital use and smaller prints |
+| XHigh | 3600 × 2544 | 300 DPI | Professional printing |
+
+Higher settings create larger files and use more browser memory. The selected preset applies to PNG, PDF, and batch ZIP exports.
 
 ## Run locally
 
@@ -77,4 +89,6 @@ README.md
 ## Browser support
 
 Use a current version of Chrome, Edge, Firefox, or Safari. Large batches are generated in memory; for hundreds of high-resolution certificates, split the input into smaller files if the browser becomes memory-constrained.
+
+For best printed results, upload a background that is at least 3508 × 2480 pixels. Smaller backgrounds can still be exported at 300 DPI, but enlarging a low-resolution source cannot restore missing image detail.
 # certificate-generator

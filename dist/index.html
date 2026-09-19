@@ -17,6 +17,14 @@
       </a>
       <div class="topbar-actions">
         <span class="privacy-note"><span class="privacy-dot"></span>Files stay on this device</span>
+        <label class="quality-control" for="exportQuality">
+          <span>Quality</span>
+          <select id="exportQuality" aria-label="Export quality">
+            <option value="normal">Normal · ~100 DPI</option>
+            <option value="high">High · ~200 DPI</option>
+            <option value="xhigh" selected>XHigh · ~300 DPI</option>
+          </select>
+        </label>
         <button class="button button-quiet" id="resetButton" type="button">Reset</button>
         <button class="button button-primary" id="downloadPngButton" type="button">Download PNG</button>
         <button class="button button-primary" id="downloadPdfButton" type="button">Download PDF</button>
@@ -161,7 +169,7 @@
 
         <div class="export-summary">
           <span class="export-icon" aria-hidden="true">✓</span>
-          <div><strong>Ready to export</strong><span id="exportSummary">3 certificates · PNG + PDF</span></div>
+          <div><strong>Export quality</strong><span id="exportSummary">3 certificates · XHigh · 3600 × 2544</span></div>
         </div>
       </aside>
     </main>
