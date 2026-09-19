@@ -2,6 +2,8 @@
 
 A fully static, browser-based certificate generator. Upload recipient data, customize text layers on a live certificate canvas, and export individual PNG/PDF files or a ZIP containing the full batch.
 
+If Certiforge is useful to you, [star the repository on GitHub](https://github.com/avikhagol/certificate-generator) to follow updates and support the project.
+
 No recipient data or uploaded artwork leaves the browser. The app has no backend and no runtime dependencies.
 
 ## Features

@@ -208,6 +208,13 @@ textarea { resize: vertical; line-height: 1.4; }
 .chips { display: flex; flex-wrap: wrap; gap: 5px; }
 .chip { border: 1px solid #d5b879; background: #fff8e9; color: #76561d; border-radius: 5px; padding: 4px 6px; font-size: .7rem; font-family: ui-monospace, monospace; }
 
+.github-card { margin-top: 14px; padding: 13px; display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 9px; border: 1px solid #cbd2dd; border-radius: 8px; background: var(--navy); color: white; }
+.github-star { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%; background: var(--gold); color: var(--navy); font-size: 1rem; }
+.github-card strong { display: block; color: white; font-size: .78rem; }
+.github-card p { margin: 4px 0 8px; color: #b8c1d1; font-size: .7rem; line-height: 1.45; }
+.github-card a { color: var(--gold-light); font-size: .74rem; font-weight: 750; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.github-card a:hover { color: white; }
+
 .workspace { min-width: 0; display: flex; flex-direction: column; background: #e9edf3; }
 .workspace-toolbar { min-height: 74px; padding: 14px 20px; border-bottom: 1px solid #d5dae3; display: flex; align-items: center; justify-content: space-between; gap: 14px; }
 .workspace-toolbar h2 { margin-top: 3px; font-size: 1.05rem; }
