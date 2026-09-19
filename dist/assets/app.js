@@ -3,9 +3,9 @@
 
   const DESIGN = { width: 1200, height: 848 };
   const QUALITY_PRESETS = {
-    normal: { label: "Normal", scale: 1, dpi: 100, jpegQuality: 0.92 },
-    high: { label: "High", scale: 2, dpi: 200, jpegQuality: 0.97 },
-    xhigh: { label: "XHigh", scale: 3, dpi: 300, jpegQuality: 1 }
+    normal: { label: "Normal", scale: 1, jpegQuality: 0.92 },
+    high: { label: "High", scale: 2, jpegQuality: 0.97 },
+    xhigh: { label: "XHigh", scale: 3, jpegQuality: 1 }
   };
   const sampleRecords = [
     { name: "Avinash Kumar", course: "Discover Camp", date: "19 September 2026", organization: "RAD@home India" },
@@ -29,6 +29,7 @@
   const state = {
     records: structuredClone(sampleRecords),
     fields: structuredClone(sampleFields),
+    images: [],
     currentRecord: 0,
     selectedField: "name",
     backgroundImage: null,
@@ -42,12 +43,13 @@
   const $ = (id) => document.getElementById(id);
   const els = {
     stage: $("certificateStage"), stageViewport: $("stageViewport"), shell: $("canvasShell"), background: $("backgroundCanvas"), fieldLayer: $("fieldLayer"),
-    dataUpload: $("dataUpload"), backgroundUpload: $("backgroundUpload"), fontUpload: $("fontUpload"), clearBackground: $("clearBackgroundButton"),
+    dataUpload: $("dataUpload"), backgroundUpload: $("backgroundUpload"), imageElementUpload: $("imageElementUpload"), replaceImageUpload: $("replaceImageUpload"), fontUpload: $("fontUpload"), clearBackground: $("clearBackgroundButton"),
     recordCount: $("recordCount"), recordPosition: $("recordPosition"), recordSelect: $("recordSelect"), recordDetails: $("recordDetails"), chips: $("placeholderChips"),
     previousRecord: $("previousRecord"), nextRecord: $("nextRecord"), sampleData: $("sampleDataButton"),
-    fieldList: $("fieldList"), addField: $("addFieldButton"), deleteField: $("deleteFieldButton"),
+    fieldList: $("fieldList"), addField: $("addFieldButton"), deleteField: $("deleteFieldButton"), selectedLayerLabel: $("selectedLayerLabel"),
     fieldForm: $("fieldForm"), fieldText: $("fieldText"), fieldFont: $("fieldFont"), fontStatus: $("fontStatus"), fieldSize: $("fieldSize"), fieldWeight: $("fieldWeight"), fieldColor: $("fieldColor"), fieldColorText: $("fieldColorText"),
     fieldX: $("fieldX"), fieldY: $("fieldY"), fieldWidth: $("fieldWidth"), alignment: $("alignmentControl"),
+    imageForm: $("imageForm"), imageLayerPreview: $("imageLayerPreview"), imageX: $("imageX"), imageY: $("imageY"), imageWidth: $("imageWidth"), imageOpacity: $("imageOpacity"), imageOpacityValue: $("imageOpacityValue"),
     zoomLabel: $("zoomLabel"), exportQuality: $("exportQuality"), exportSummary: $("exportSummary"), reset: $("resetButton"), downloadPng: $("downloadPngButton"), downloadPdf: $("downloadPdfButton"), batch: $("batchButton"),
     toast: $("toast"), progress: $("progressOverlay"), progressTitle: $("progressTitle"), progressText: $("progressText"), progressBar: $("progressBar")
   };
@@ -122,11 +124,7 @@
     if (state.backgroundImage) {
       ctx.fillStyle = "#fff";
       ctx.fillRect(0, 0, DESIGN.width, DESIGN.height);
-      const img = state.backgroundImage;
-      const scale = Math.max(DESIGN.width / img.naturalWidth, DESIGN.height / img.naturalHeight);
-      const w = img.naturalWidth * scale;
-      const h = img.naturalHeight * scale;
-      ctx.drawImage(img, (DESIGN.width - w) / 2, (DESIGN.height - h) / 2, w, h);
+      ctx.drawImage(state.backgroundImage, 0, 0, DESIGN.width, DESIGN.height);
     } else {
       drawDefaultTemplate(ctx);
     }
@@ -136,7 +134,36 @@
     return String(template).replace(/{{\s*([^}]+?)\s*}}/g, (_, key) => record[key] ?? "");
   }
 
+  function setDesignSize(width, height) {
+    const nextWidth = Math.max(1, Math.round(width));
+    const nextHeight = Math.max(1, Math.round(height));
+    const ratioX = nextWidth / DESIGN.width;
+    const ratioY = nextHeight / DESIGN.height;
+    const sizeRatio = Math.min(ratioX, ratioY);
+    [...state.fields, ...state.images].forEach((item) => {
+      item.x *= ratioX;
+      item.y *= ratioY;
+      item.width *= ratioX;
+      if ("height" in item) item.height *= ratioY;
+      if ("size" in item) item.size *= sizeRatio;
+    });
+    DESIGN.width = nextWidth;
+    DESIGN.height = nextHeight;
+    els.background.width = nextWidth;
+    els.background.height = nextHeight;
+    els.stage.style.width = `${nextWidth}px`;
+    els.stage.style.height = `${nextHeight}px`;
+    els.fieldX.max = nextWidth;
+    els.fieldY.max = nextHeight;
+    els.fieldWidth.max = nextWidth;
+    els.imageX.max = nextWidth;
+    els.imageY.max = nextHeight;
+    els.imageWidth.max = nextWidth;
+  }
+
   function getSelectedField() { return state.fields.find((item) => item.id === state.selectedField); }
+  function getSelectedImage() { return state.images.find((item) => item.id === state.selectedField); }
+  function getSelectedItem() { return getSelectedField() || getSelectedImage(); }
 
   function renderAll() {
     drawBackground(bgCtx);
@@ -186,6 +213,21 @@
   function renderFields() {
     const record = state.records[state.currentRecord] || {};
     const fragment = document.createDocumentFragment();
+    state.images.forEach((item) => {
+      const node = document.createElement("div");
+      node.className = `canvas-field image-field${item.id === state.selectedField ? " selected" : ""}`;
+      node.dataset.id = item.id;
+      node.style.cssText = `left:${item.x}px;top:${item.y}px;width:${item.width}px;height:${item.height}px;opacity:${item.opacity};`;
+      const image = document.createElement("img");
+      image.src = item.src;
+      image.alt = "";
+      const handle = document.createElement("span");
+      handle.className = "resize-handle";
+      handle.setAttribute("aria-hidden", "true");
+      node.append(image, handle);
+      node.addEventListener("pointerdown", startFieldInteraction);
+      fragment.append(node);
+    });
     state.fields.forEach((item) => {
       const node = document.createElement("div");
       node.className = `canvas-field${item.id === state.selectedField ? " selected" : ""}`;
@@ -207,19 +249,23 @@
   function alignToFlex(align) { return align === "left" ? "flex-start" : align === "right" ? "flex-end" : "center"; }
 
   function renderFieldList() {
-    els.fieldList.replaceChildren(...state.fields.map((item, index) => {
+    const imageButtons = state.images.map((item, index) => createLayerButton(item, "image", index));
+    const textButtons = state.fields.map((item, index) => createLayerButton(item, "text", index));
+    els.fieldList.replaceChildren(...imageButtons, ...textButtons);
+  }
+
+  function createLayerButton(item, type, index) {
       const button = document.createElement("button");
       button.type = "button";
       button.className = `layer-button${item.id === state.selectedField ? " selected" : ""}`;
       button.dataset.id = item.id;
-      const icon = document.createElement("span"); icon.className = "layer-icon"; icon.textContent = "T";
+      const icon = document.createElement("span"); icon.className = "layer-icon"; icon.textContent = type === "image" ? "▧" : "T";
       const copy = document.createElement("span"); copy.className = "layer-copy";
-      const title = document.createElement("strong"); title.textContent = displayFieldName(item, index);
-      const subtitle = document.createElement("span"); subtitle.textContent = item.text.replace(/\n/g, " ");
+      const title = document.createElement("strong"); title.textContent = type === "image" ? item.name : displayFieldName(item, index);
+      const subtitle = document.createElement("span"); subtitle.textContent = type === "image" ? `${Math.round(item.width)} × ${Math.round(item.height)} px` : item.text.replace(/\n/g, " ");
       copy.append(title, subtitle); button.append(icon, copy);
       button.addEventListener("click", () => selectField(item.id));
       return button;
-    }));
   }
 
   function displayFieldName(item, index) {
@@ -230,20 +276,32 @@
   }
 
   function populateForm() {
-    const item = getSelectedField();
-    els.fieldForm.toggleAttribute("hidden", !item);
-    els.deleteField.disabled = !item;
-    if (!item) return;
-    els.fieldText.value = item.text;
-    els.fieldFont.value = item.font;
-    els.fieldSize.value = item.size;
-    els.fieldWeight.value = item.weight;
-    els.fieldColor.value = item.color;
-    els.fieldColorText.value = item.color;
-    els.fieldX.value = Math.round(item.x);
-    els.fieldY.value = Math.round(item.y);
-    els.fieldWidth.value = Math.round(item.width);
-    els.alignment.querySelectorAll("button").forEach((button) => button.classList.toggle("active", button.dataset.align === item.align));
+    const textItem = getSelectedField();
+    const imageItem = getSelectedImage();
+    els.fieldForm.toggleAttribute("hidden", !textItem);
+    els.imageForm.toggleAttribute("hidden", !imageItem);
+    els.deleteField.disabled = !textItem && !imageItem;
+    els.selectedLayerLabel.textContent = imageItem ? "Selected picture" : "Selected text";
+    if (textItem) {
+      els.fieldText.value = textItem.text;
+      els.fieldFont.value = textItem.font;
+      els.fieldSize.value = textItem.size;
+      els.fieldWeight.value = textItem.weight;
+      els.fieldColor.value = textItem.color;
+      els.fieldColorText.value = textItem.color;
+      els.fieldX.value = Math.round(textItem.x);
+      els.fieldY.value = Math.round(textItem.y);
+      els.fieldWidth.value = Math.round(textItem.width);
+      els.alignment.querySelectorAll("button").forEach((button) => button.classList.toggle("active", button.dataset.align === textItem.align));
+    }
+    if (imageItem) {
+      els.imageLayerPreview.src = imageItem.src;
+      els.imageX.value = Math.round(imageItem.x);
+      els.imageY.value = Math.round(imageItem.y);
+      els.imageWidth.value = Math.round(imageItem.width);
+      els.imageOpacity.value = Math.round(imageItem.opacity * 100);
+      els.imageOpacityValue.textContent = `${Math.round(imageItem.opacity * 100)}%`;
+    }
   }
 
   function selectField(id) {
@@ -252,7 +310,7 @@
   }
 
   function updateSelected(key, value) {
-    const item = getSelectedField();
+    const item = getSelectedItem();
     if (!item) return;
     item[key] = value;
     renderFields(); renderFieldList();
@@ -287,11 +345,12 @@
       els.fieldLayer.querySelectorAll(".canvas-field").forEach((node) => node.classList.toggle("selected", node.dataset.id === id));
       renderFieldList(); populateForm();
     }
-    const item = state.fields.find((candidate) => candidate.id === id);
+    const item = getSelectedItem();
+    const isImage = Boolean(getSelectedImage());
     const resizing = event.target.classList.contains("resize-handle");
     state.interaction = {
-      id, resizing, pointerId: event.pointerId, startX: event.clientX, startY: event.clientY,
-      x: item.x, y: item.y, width: item.width, size: item.size
+      id, isImage, resizing, pointerId: event.pointerId, startX: event.clientX, startY: event.clientY,
+      x: item.x, y: item.y, width: item.width, height: item.height, size: item.size
     };
     event.currentTarget.setPointerCapture(event.pointerId);
     event.preventDefault();
@@ -300,15 +359,23 @@
   function moveFieldInteraction(event) {
     const action = state.interaction;
     if (!action || action.pointerId !== event.pointerId) return;
-    const item = state.fields.find((candidate) => candidate.id === action.id);
+    const item = state.fields.find((candidate) => candidate.id === action.id) || state.images.find((candidate) => candidate.id === action.id);
     const dx = (event.clientX - action.startX) / state.scale;
     const dy = (event.clientY - action.startY) / state.scale;
     if (action.resizing) {
-      item.width = clamp(action.width + dx, 80, DESIGN.width - item.x);
-      item.size = clamp(action.size + dy * 0.18, 12, 180);
+      if (action.isImage) {
+        const aspect = action.width / action.height;
+        const maxWidth = Math.min(DESIGN.width - item.x, (DESIGN.height - item.y) * aspect);
+        item.width = clamp(action.width + dx, 40, maxWidth);
+        item.height = item.width / aspect;
+      } else {
+        item.width = clamp(action.width + dx, 80, DESIGN.width - item.x);
+        item.size = clamp(action.size + dy * 0.18, 12, 180);
+      }
     } else {
       item.x = clamp(action.x + dx, 0, DESIGN.width - item.width);
-      item.y = clamp(action.y + dy, 0, DESIGN.height - item.size * 1.3);
+      const itemHeight = action.isImage ? item.height : item.size * 1.3;
+      item.y = clamp(action.y + dy, 0, DESIGN.height - itemHeight);
     }
     renderFields(); populateForm();
   }
@@ -320,7 +387,7 @@
   function clamp(value, min, max) { return Math.max(min, Math.min(max, value)); }
 
   function handleStageKeydown(event) {
-    const item = getSelectedField();
+    const item = getSelectedItem();
     if (!item || !["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
     const amount = event.shiftKey ? 10 : 1;
     if (event.key === "ArrowLeft") item.x = clamp(item.x - amount, 0, DESIGN.width - item.width);
@@ -379,9 +446,56 @@
     try {
       const src = await readFileAsDataUrl(file);
       const image = await loadImage(src);
+      if (image.naturalWidth * image.naturalHeight > 50000000) throw new Error("Background images must be smaller than 50 megapixels.");
       state.backgroundImage = image; state.backgroundName = file.name;
-      drawBackground(bgCtx); showToast(`${file.name} is now the background`);
-    } catch { showToast("That background image could not be opened.", true); }
+      setDesignSize(image.naturalWidth, image.naturalHeight);
+      renderAll();
+      showToast(`Canvas resized to ${image.naturalWidth} × ${image.naturalHeight}`);
+    } catch (error) { console.error("Background upload failed", error); showToast(error.message || "That background image could not be opened.", true); }
+    event.target.value = "";
+  }
+
+  async function handleImageElementUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    try {
+      const src = await readFileAsDataUrl(file);
+      const image = await loadImage(src);
+      const maxWidth = DESIGN.width * 0.28;
+      const maxHeight = DESIGN.height * 0.28;
+      const scale = Math.min(1, maxWidth / image.naturalWidth, maxHeight / image.naturalHeight);
+      const width = Math.max(40, image.naturalWidth * scale);
+      const height = Math.max(40, image.naturalHeight * scale);
+      const item = {
+        id: `image-${Date.now()}-${state.images.length}`,
+        name: file.name.replace(/\.[^.]+$/, "") || `Picture ${state.images.length + 1}`,
+        src, image, x: (DESIGN.width - width) / 2, y: (DESIGN.height - height) / 2,
+        width, height, opacity: 1
+      };
+      state.images.push(item);
+      selectField(item.id);
+      showToast(`${file.name} added as a picture layer`);
+    } catch (error) { console.error("Picture upload failed", error); showToast("That picture could not be opened.", true); }
+    event.target.value = "";
+  }
+
+  async function handleReplaceImage(event) {
+    const file = event.target.files[0];
+    const item = getSelectedImage();
+    if (!file || !item) return;
+    try {
+      const src = await readFileAsDataUrl(file);
+      const image = await loadImage(src);
+      const area = item.width * item.height;
+      const ratio = image.naturalWidth / image.naturalHeight;
+      item.width = Math.sqrt(area * ratio);
+      item.height = item.width / ratio;
+      item.name = file.name.replace(/\.[^.]+$/, "") || item.name;
+      item.src = src;
+      item.image = image;
+      renderFields(); renderFieldList(); populateForm();
+      showToast("Picture layer replaced");
+    } catch (error) { console.error("Picture replacement failed", error); showToast("That picture could not be opened.", true); }
     event.target.value = "";
   }
 
@@ -448,6 +562,13 @@
   }
 
   function deleteField() {
+    const imageIndex = state.images.findIndex((item) => item.id === state.selectedField);
+    if (imageIndex >= 0) {
+      state.images.splice(imageIndex, 1);
+      state.selectedField = state.fields[0]?.id || state.images[0]?.id || null;
+      renderFields(); renderFieldList(); populateForm();
+      return;
+    }
     if (state.fields.length === 1) { showToast("Keep at least one text field.", true); return; }
     const index = state.fields.findIndex((item) => item.id === state.selectedField);
     if (index < 0) return;
@@ -465,6 +586,12 @@
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
     drawBackground(ctx);
+    state.images.forEach((item) => {
+      ctx.save();
+      ctx.globalAlpha = item.opacity;
+      ctx.drawImage(item.image, item.x, item.y, item.width, item.height);
+      ctx.restore();
+    });
     ctx.textBaseline = "top";
     state.fields.forEach((item) => drawTextField(ctx, item, resolveText(item.text, record)));
     return canvas;
@@ -549,8 +676,11 @@
     };
     object(1, "<< /Type /Catalog /Pages 2 0 R >>");
     object(2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>");
-    object(3, "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /XObject << /Im1 5 0 R >> >> /Contents 4 0 R >>");
-    const content = encoder.encode("q\n842 0 0 595 0 0 cm\n/Im1 Do\nQ");
+    const landscape = canvas.width >= canvas.height;
+    const pageWidth = landscape ? 842 : Math.round(842 * canvas.width / canvas.height);
+    const pageHeight = landscape ? Math.round(842 * canvas.height / canvas.width) : 842;
+    object(3, `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /XObject << /Im1 5 0 R >> >> /Contents 4 0 R >>`);
+    const content = encoder.encode(`q\n${pageWidth} 0 0 ${pageHeight} 0 0 cm\n/Im1 Do\nQ`);
     object(4, `<< /Length ${content.length} >>`, content);
     object(5, `<< /Type /XObject /Subtype /Image /Width ${canvas.width} /Height ${canvas.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpeg.length} >>`, jpeg);
     const xref = length;
@@ -660,20 +790,24 @@
   }
 
   function resetApp() {
-    state.records = clone(sampleRecords); state.fields = clone(sampleFields); state.currentRecord = 0; state.selectedField = "name"; state.backgroundImage = null; state.backgroundName = "Sample template";
+    state.backgroundImage = null; state.backgroundName = "Sample template";
+    setDesignSize(1200, 848);
+    state.records = clone(sampleRecords); state.fields = clone(sampleFields); state.images = []; state.currentRecord = 0; state.selectedField = "name";
     renderAll(); showToast("Sample certificate restored");
   }
 
   els.dataUpload.addEventListener("change", handleDataUpload);
   els.backgroundUpload.addEventListener("change", handleBackgroundUpload);
+  els.imageElementUpload.addEventListener("change", handleImageElementUpload);
+  els.replaceImageUpload.addEventListener("change", handleReplaceImage);
   els.fontUpload.addEventListener("change", handleFontUpload);
   els.exportQuality.addEventListener("change", (event) => {
     state.exportQuality = event.target.value;
     const preset = currentQualityPreset();
     renderData();
-    showToast(`${preset.label} export selected · about ${preset.dpi} DPI`);
+    showToast(`${preset.label} export selected · ${preset.scale}× resolution`);
   });
-  els.clearBackground.addEventListener("click", () => { state.backgroundImage = null; state.backgroundName = "Sample template"; drawBackground(bgCtx); showToast("Sample template restored"); });
+  els.clearBackground.addEventListener("click", () => { state.backgroundImage = null; state.backgroundName = "Sample template"; setDesignSize(1200, 848); renderAll(); showToast("Sample template restored"); });
   els.recordSelect.addEventListener("change", () => { state.currentRecord = Number(els.recordSelect.value); renderData(); renderFields(); });
   els.previousRecord.addEventListener("click", () => { state.currentRecord = (state.currentRecord - 1 + state.records.length) % state.records.length; renderData(); renderFields(); });
   els.nextRecord.addEventListener("click", () => { state.currentRecord = (state.currentRecord + 1) % state.records.length; renderData(); renderFields(); });
@@ -689,6 +823,22 @@
   els.fieldX.addEventListener("input", (event) => updateSelected("x", clamp(Number(event.target.value) || 0, 0, DESIGN.width)));
   els.fieldY.addEventListener("input", (event) => updateSelected("y", clamp(Number(event.target.value) || 0, 0, DESIGN.height)));
   els.fieldWidth.addEventListener("input", (event) => updateSelected("width", clamp(Number(event.target.value) || 80, 80, DESIGN.width)));
+  els.imageX.addEventListener("input", (event) => updateSelected("x", clamp(Number(event.target.value) || 0, 0, DESIGN.width)));
+  els.imageY.addEventListener("input", (event) => updateSelected("y", clamp(Number(event.target.value) || 0, 0, DESIGN.height)));
+  els.imageWidth.addEventListener("input", (event) => {
+    const item = getSelectedImage();
+    if (!item) return;
+    const ratio = item.height / item.width;
+    const maxWidth = Math.min(DESIGN.width - item.x, (DESIGN.height - item.y) / ratio);
+    item.width = clamp(Number(event.target.value) || 20, Math.min(20, maxWidth), maxWidth);
+    item.height = item.width * ratio;
+    renderFields(); renderFieldList(); populateForm();
+  });
+  els.imageOpacity.addEventListener("input", (event) => {
+    const value = clamp(Number(event.target.value) || 100, 10, 100);
+    els.imageOpacityValue.textContent = `${value}%`;
+    updateSelected("opacity", value / 100);
+  });
   els.alignment.addEventListener("click", (event) => { const button = event.target.closest("button[data-align]"); if (button) { updateSelected("align", button.dataset.align); populateForm(); } });
   els.stage.addEventListener("pointermove", moveFieldInteraction);
   els.stage.addEventListener("pointerup", endFieldInteraction);

@@ -10,10 +10,11 @@ No recipient data or uploaded artwork leaves the browser. The app has no backend
 
 - CSV files with any header names; headers become placeholders such as `{{name}}`
 - TXT files with one recipient name per line
-- PNG, JPEG, or WebP certificate backgrounds
+- PNG, JPEG, or WebP backgrounds that set the certificate's native dimensions
+- Multiple independently movable, resizable, replaceable picture layers
 - Fixed text and variable placeholder fields
 - Local custom font uploads (`.ttf`, `.otf`, `.woff`, and `.woff2`)
-- Drag, resize, nudge, style, align, add, and delete text layers
+- Drag, resize, nudge, style, align, add, and delete text and picture layers
 - Live preview for every record
 - Selectable Normal, High, and XHigh PNG and landscape A4 PDF export quality
 - Batch ZIP with high-resolution PNG and PDF folders
@@ -39,15 +40,21 @@ Select a text layer, then choose **+ Custom** beside the Font menu. Uploaded TTF
 
 Custom fonts must be reselected after reloading the page. Ensure that the font's license permits use in generated certificates.
 
+## Backgrounds and picture layers
+
+Uploading a background changes the certificate canvas to the image's exact pixel dimensions. Existing text and picture positions are scaled proportionally so the layout stays aligned.
+
+Use **Add picture** to place logos, signatures, portraits, seals, or other artwork above the background. You can add multiple pictures, then move, resize, adjust opacity, replace, or delete each layer independently. Picture layers are included in PNG, PDF, and ZIP exports and never leave the browser.
+
 ## Export quality
 
 Choose a quality preset in the top toolbar before downloading:
 
-| Preset | Render size | Approximate A4 DPI | Best for |
-| --- | --- | --- | --- |
-| Normal | 1200 × 848 | 100 DPI | Quick drafts and screen sharing |
-| High | 2400 × 1696 | 200 DPI | Everyday digital use and smaller prints |
-| XHigh | 3600 × 2544 | 300 DPI | Professional printing |
+| Preset | Render scale | Best for |
+| --- | --- | --- |
+| Normal | Original background dimensions | Quick drafts and screen sharing |
+| High | 2× background dimensions | Everyday digital use and smaller prints |
+| XHigh | 3× background dimensions | Professional printing |
 
 Higher settings create larger files and use more browser memory. The selected preset applies to PNG, PDF, and batch ZIP exports.
 
@@ -92,5 +99,4 @@ README.md
 
 Use a current version of Chrome, Edge, Firefox, or Safari. Large batches are generated in memory; for hundreds of high-resolution certificates, split the input into smaller files if the browser becomes memory-constrained.
 
-For best printed results, upload a background that is at least 3508 × 2480 pixels. Smaller backgrounds can still be exported at 300 DPI, but enlarging a low-resolution source cannot restore missing image detail.
-# certificate-generator
+For best printed results, start with a high-resolution background. Higher export scales make text and picture layers sharper, but cannot restore detail missing from a low-resolution background image.

@@ -20,9 +20,9 @@
         <label class="quality-control" for="exportQuality">
           <span>Quality</span>
           <select id="exportQuality" aria-label="Export quality">
-            <option value="normal">Normal · ~100 DPI</option>
-            <option value="high">High · ~200 DPI</option>
-            <option value="xhigh" selected>XHigh · ~300 DPI</option>
+            <option value="normal">Normal · 1×</option>
+            <option value="high">High · 2×</option>
+            <option value="xhigh" selected>XHigh · 3×</option>
           </select>
         </label>
         <button class="button button-quiet" id="resetButton" type="button">Reset</button>
@@ -93,6 +93,10 @@
               Change background
               <input id="backgroundUpload" type="file" accept="image/png,image/jpeg,image/webp" hidden />
             </label>
+            <label class="button button-quiet upload-button" for="imageElementUpload">
+              Add picture
+              <input id="imageElementUpload" type="file" accept="image/png,image/jpeg,image/webp" hidden />
+            </label>
             <button class="button button-quiet" id="clearBackgroundButton" type="button">Use sample template</button>
             <span class="zoom-label" id="zoomLabel">100%</span>
           </div>
@@ -100,29 +104,33 @@
 
         <div class="canvas-shell" id="canvasShell">
           <div class="stage-viewport" id="stageViewport">
-            <div class="certificate-stage" id="certificateStage" tabindex="0" aria-label="Certificate canvas. Select and drag text fields to position them.">
+            <div class="certificate-stage" id="certificateStage" tabindex="0" aria-label="Certificate canvas. Select and drag text or picture layers to position them.">
               <canvas id="backgroundCanvas" width="1200" height="848"></canvas>
               <div id="fieldLayer"></div>
             </div>
           </div>
         </div>
 
-        <p class="canvas-help">Drag text to move it. Drag the corner handle to resize. Arrow keys nudge the selected field.</p>
+        <p class="canvas-help">Drag text or pictures to move them. Drag the corner handle to resize. Arrow keys nudge the selected layer.</p>
       </section>
 
-      <aside class="panel properties-panel" aria-label="Text settings">
+      <aside class="panel properties-panel" aria-label="Layer settings">
         <div class="panel-heading">
           <p class="eyebrow">Step 3</p>
-          <h2>Text fields</h2>
-          <button class="icon-button add-button" id="addFieldButton" type="button" aria-label="Add text field">+</button>
+          <h2>Layers</h2>
+          <div class="layer-actions">
+            <button class="button button-quiet layer-add-button" id="addFieldButton" type="button">+ Text</button>
+            <label class="button button-quiet layer-add-button" for="imageElementUpload">+ Picture</label>
+          </div>
         </div>
         <div class="layers" id="fieldList"></div>
 
+        <div class="section-title-row properties-heading">
+          <h2 id="selectedLayerLabel">Selected text</h2>
+          <button class="danger-link" id="deleteFieldButton" type="button">Delete</button>
+        </div>
+
         <form id="fieldForm" class="field-form" autocomplete="off">
-          <div class="section-title-row properties-heading">
-            <h2>Selected field</h2>
-            <button class="danger-link" id="deleteFieldButton" type="button">Delete</button>
-          </div>
 
           <label class="form-label" for="fieldText">Text & placeholders</label>
           <textarea id="fieldText" rows="3" spellcheck="true"></textarea>
@@ -176,6 +184,24 @@
             <label><span class="form-label">Y</span><input id="fieldY" type="number" min="0" max="848" /></label>
             <label><span class="form-label">Width</span><input id="fieldWidth" type="number" min="80" max="1200" /></label>
           </div>
+        </form>
+
+        <form id="imageForm" class="field-form image-form" autocomplete="off" hidden>
+          <div class="image-layer-preview"><img id="imageLayerPreview" alt="Selected picture layer" /></div>
+          <label class="button button-quiet replace-image-button" for="replaceImageUpload">
+            Replace picture
+            <input id="replaceImageUpload" type="file" accept="image/png,image/jpeg,image/webp" hidden />
+          </label>
+          <div class="form-grid positions-grid">
+            <label><span class="form-label">X</span><input id="imageX" type="number" min="0" /></label>
+            <label><span class="form-label">Y</span><input id="imageY" type="number" min="0" /></label>
+            <label><span class="form-label">Width</span><input id="imageWidth" type="number" min="20" /></label>
+          </div>
+          <label>
+            <span class="form-label">Opacity</span>
+            <div class="range-row"><input id="imageOpacity" type="range" min="10" max="100" step="1" /><output id="imageOpacityValue">100%</output></div>
+          </label>
+          <p class="image-layer-hint">Add as many pictures as needed. Each layer can be moved, resized, replaced, or removed independently.</p>
         </form>
 
         <div class="export-summary">
