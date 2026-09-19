@@ -23,8 +23,8 @@ CSV example:
 
 ```csv
 name,course,date,organization
-Avery Morgan,Creative Leadership,19 September 2026,Northstar Academy
-Samira Okafor,Creative Leadership,19 September 2026,Northstar Academy
+Avinash Kumar,Discover Camp,19 September 2026,RAD@home India
+Lorem Ipsum,Discover Camp,19 September 2026,RAD@home India
 ```
 
 Each header is available as a placeholder. For example, `{{course}}` resolves to the course value for the selected recipient.

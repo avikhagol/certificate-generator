@@ -3,9 +3,9 @@
 
   const DESIGN = { width: 1200, height: 848 };
   const sampleRecords = [
-    { name: "Avery Morgan", course: "Creative Leadership", date: "19 September 2026", organization: "Northstar Academy" },
-    { name: "Samira Okafor", course: "Creative Leadership", date: "19 September 2026", organization: "Northstar Academy" },
-    { name: "Mateo Silva", course: "Creative Leadership", date: "19 September 2026", organization: "Northstar Academy" }
+    { name: "Avinash Kumar", course: "Discover Camp", date: "19 September 2026", organization: "RAD@home India" },
+    { name: "Lorem Ipsum", course: "Discover Camp", date: "19 September 2026", organization: "RAD@home India" },
+    { name: "Name Surname", course: "Discover Camp", date: "19 September 2026", organization: "RAD@home India" }
   ];
 
   const sampleFields = [
