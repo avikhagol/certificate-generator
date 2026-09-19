@@ -93,6 +93,7 @@
               Change background
               <input id="backgroundUpload" type="file" accept="image/png,image/jpeg,image/webp" hidden />
             </label>
+            <button class="button button-quiet" id="cropBackgroundButton" type="button" disabled>Crop background</button>
             <label class="button button-quiet upload-button" for="imageElementUpload">
               Add picture
               <input id="imageElementUpload" type="file" accept="image/png,image/jpeg,image/webp" hidden />
@@ -188,10 +189,13 @@
 
         <form id="imageForm" class="field-form image-form" autocomplete="off" hidden>
           <div class="image-layer-preview"><img id="imageLayerPreview" alt="Selected picture layer" /></div>
-          <label class="button button-quiet replace-image-button" for="replaceImageUpload">
-            Replace picture
-            <input id="replaceImageUpload" type="file" accept="image/png,image/jpeg,image/webp" hidden />
-          </label>
+          <div class="image-edit-actions">
+            <label class="button button-quiet replace-image-button" for="replaceImageUpload">
+              Replace picture
+              <input id="replaceImageUpload" type="file" accept="image/png,image/jpeg,image/webp" hidden />
+            </label>
+            <button class="button button-quiet" id="cropImageButton" type="button">Crop picture</button>
+          </div>
           <div class="form-grid positions-grid">
             <label><span class="form-label">X</span><input id="imageX" type="number" min="0" /></label>
             <label><span class="form-label">Y</span><input id="imageY" type="number" min="0" /></label>
@@ -220,6 +224,43 @@
         <div class="progress-track"><div id="progressBar"></div></div>
       </div>
     </div>
+
+    <dialog class="crop-dialog" id="cropDialog" aria-labelledby="cropDialogTitle">
+      <form method="dialog" class="crop-card">
+        <div class="crop-heading">
+          <div>
+            <p class="eyebrow">Image editor</p>
+            <h2 id="cropDialogTitle">Crop image</h2>
+          </div>
+          <button class="crop-close" id="cropCancelIcon" value="cancel" aria-label="Close crop editor">×</button>
+        </div>
+        <div class="crop-workspace">
+          <canvas id="cropCanvas" width="900" height="520" aria-label="Crop preview. Drag the crop box to move it or drag its lower-right handle to resize it."></canvas>
+        </div>
+        <p class="crop-help">Drag inside the frame to move it. Drag the lower-right corner to resize.</p>
+        <div class="crop-controls">
+          <label><span class="form-label">Aspect ratio</span>
+            <select id="cropAspect">
+              <option value="free">Free</option>
+              <option value="certificate">Current certificate</option>
+              <option value="1">Square · 1:1</option>
+              <option value="1.3333333333">Standard · 4:3</option>
+              <option value="1.7777777778">Widescreen · 16:9</option>
+            </select>
+          </label>
+          <label><span class="form-label">X</span><input id="cropX" type="number" min="0" step="1" /></label>
+          <label><span class="form-label">Y</span><input id="cropY" type="number" min="0" step="1" /></label>
+          <label><span class="form-label">Width</span><input id="cropWidth" type="number" min="1" step="1" /></label>
+          <label><span class="form-label">Height</span><input id="cropHeight" type="number" min="1" step="1" /></label>
+        </div>
+        <div class="crop-actions">
+          <button class="button button-quiet" id="cropResetButton" type="button">Reset crop</button>
+          <span></span>
+          <button class="button button-quiet" value="cancel">Cancel</button>
+          <button class="button button-accent" id="cropApplyButton" type="button">Apply crop</button>
+        </div>
+      </form>
+    </dialog>
 
     <script src="assets/app.js"></script>
   </body>

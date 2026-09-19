@@ -33,17 +33,21 @@
     currentRecord: 0,
     selectedField: "name",
     backgroundImage: null,
+    backgroundSourceImage: null,
+    backgroundSourceSrc: null,
+    backgroundCrop: null,
     backgroundName: "Sample template",
     exportQuality: "xhigh",
     customFonts: [],
     scale: 1,
-    interaction: null
+    interaction: null,
+    cropSession: null
   };
 
   const $ = (id) => document.getElementById(id);
   const els = {
     stage: $("certificateStage"), stageViewport: $("stageViewport"), shell: $("canvasShell"), background: $("backgroundCanvas"), fieldLayer: $("fieldLayer"),
-    dataUpload: $("dataUpload"), backgroundUpload: $("backgroundUpload"), imageElementUpload: $("imageElementUpload"), replaceImageUpload: $("replaceImageUpload"), fontUpload: $("fontUpload"), clearBackground: $("clearBackgroundButton"),
+    dataUpload: $("dataUpload"), backgroundUpload: $("backgroundUpload"), imageElementUpload: $("imageElementUpload"), replaceImageUpload: $("replaceImageUpload"), fontUpload: $("fontUpload"), clearBackground: $("clearBackgroundButton"), cropBackground: $("cropBackgroundButton"), cropImage: $("cropImageButton"),
     recordCount: $("recordCount"), recordPosition: $("recordPosition"), recordSelect: $("recordSelect"), recordDetails: $("recordDetails"), chips: $("placeholderChips"),
     previousRecord: $("previousRecord"), nextRecord: $("nextRecord"), sampleData: $("sampleDataButton"),
     fieldList: $("fieldList"), addField: $("addFieldButton"), deleteField: $("deleteFieldButton"), selectedLayerLabel: $("selectedLayerLabel"),
@@ -51,10 +55,12 @@
     fieldX: $("fieldX"), fieldY: $("fieldY"), fieldWidth: $("fieldWidth"), alignment: $("alignmentControl"),
     imageForm: $("imageForm"), imageLayerPreview: $("imageLayerPreview"), imageX: $("imageX"), imageY: $("imageY"), imageWidth: $("imageWidth"), imageOpacity: $("imageOpacity"), imageOpacityValue: $("imageOpacityValue"),
     zoomLabel: $("zoomLabel"), exportQuality: $("exportQuality"), exportSummary: $("exportSummary"), reset: $("resetButton"), downloadPng: $("downloadPngButton"), downloadPdf: $("downloadPdfButton"), batch: $("batchButton"),
-    toast: $("toast"), progress: $("progressOverlay"), progressTitle: $("progressTitle"), progressText: $("progressText"), progressBar: $("progressBar")
+    toast: $("toast"), progress: $("progressOverlay"), progressTitle: $("progressTitle"), progressText: $("progressText"), progressBar: $("progressBar"),
+    cropDialog: $("cropDialog"), cropDialogTitle: $("cropDialogTitle"), cropCanvas: $("cropCanvas"), cropAspect: $("cropAspect"), cropX: $("cropX"), cropY: $("cropY"), cropWidth: $("cropWidth"), cropHeight: $("cropHeight"), cropReset: $("cropResetButton"), cropApply: $("cropApplyButton")
   };
 
   const bgCtx = els.background.getContext("2d");
+  const cropCtx = els.cropCanvas.getContext("2d");
   let toastTimer;
 
   function clone(value) { return JSON.parse(JSON.stringify(value)); }
@@ -166,6 +172,7 @@
   function getSelectedItem() { return getSelectedField() || getSelectedImage(); }
 
   function renderAll() {
+    els.cropBackground.disabled = !state.backgroundSourceImage;
     drawBackground(bgCtx);
     renderData();
     renderFields();
@@ -447,7 +454,7 @@
       const src = await readFileAsDataUrl(file);
       const image = await loadImage(src);
       if (image.naturalWidth * image.naturalHeight > 50000000) throw new Error("Background images must be smaller than 50 megapixels.");
-      state.backgroundImage = image; state.backgroundName = file.name;
+      state.backgroundImage = image; state.backgroundSourceImage = image; state.backgroundSourceSrc = src; state.backgroundCrop = null; state.backgroundName = file.name;
       setDesignSize(image.naturalWidth, image.naturalHeight);
       renderAll();
       showToast(`Canvas resized to ${image.naturalWidth} × ${image.naturalHeight}`);
@@ -469,8 +476,8 @@
       const item = {
         id: `image-${Date.now()}-${state.images.length}`,
         name: file.name.replace(/\.[^.]+$/, "") || `Picture ${state.images.length + 1}`,
-        src, image, x: (DESIGN.width - width) / 2, y: (DESIGN.height - height) / 2,
-        width, height, opacity: 1
+        src, image, sourceSrc: src, sourceImage: image, x: (DESIGN.width - width) / 2, y: (DESIGN.height - height) / 2,
+        width, height, opacity: 1, crop: null
       };
       state.images.push(item);
       selectField(item.id);
@@ -493,6 +500,9 @@
       item.name = file.name.replace(/\.[^.]+$/, "") || item.name;
       item.src = src;
       item.image = image;
+      item.sourceSrc = src;
+      item.sourceImage = image;
+      item.crop = null;
       renderFields(); renderFieldList(); populateForm();
       showToast("Picture layer replaced");
     } catch (error) { console.error("Picture replacement failed", error); showToast("That picture could not be opened.", true); }
@@ -553,6 +563,190 @@
     return new Promise((resolve, reject) => {
       const image = new Image(); image.onload = () => resolve(image); image.onerror = reject; image.src = src;
     });
+  }
+
+  function fullImageCrop(image) {
+    return { x: 0, y: 0, width: image.naturalWidth, height: image.naturalHeight };
+  }
+
+  function openCropEditor(kind) {
+    const item = kind === "image" ? getSelectedImage() : null;
+    const image = kind === "background" ? state.backgroundSourceImage : item?.sourceImage;
+    if (!image) { showToast(`Upload a ${kind === "background" ? "background" : "picture"} first.`, true); return; }
+    const savedCrop = kind === "background" ? state.backgroundCrop : item.crop;
+    state.cropSession = {
+      kind,
+      targetId: item?.id || null,
+      image,
+      crop: savedCrop ? { ...savedCrop } : fullImageCrop(image),
+      drag: null,
+      view: null
+    };
+    els.cropDialogTitle.textContent = kind === "background" ? "Crop background" : `Crop ${item.name}`;
+    els.cropAspect.value = "free";
+    syncCropInputs();
+    els.cropDialog.showModal();
+    requestAnimationFrame(drawCropEditor);
+  }
+
+  function cropRatio() {
+    const value = els.cropAspect.value;
+    if (value === "free") return null;
+    if (value === "certificate") return DESIGN.width / DESIGN.height;
+    return Number(value) || null;
+  }
+
+  function fitCropToRatio(ratio) {
+    const session = state.cropSession;
+    if (!session || !ratio) return;
+    const { naturalWidth: width, naturalHeight: height } = session.image;
+    let cropWidth = width;
+    let cropHeight = cropWidth / ratio;
+    if (cropHeight > height) { cropHeight = height; cropWidth = cropHeight * ratio; }
+    session.crop = { x: (width - cropWidth) / 2, y: (height - cropHeight) / 2, width: cropWidth, height: cropHeight };
+    syncCropInputs(); drawCropEditor();
+  }
+
+  function normalizeCrop(crop, image, changed = "") {
+    const ratio = cropRatio();
+    const maxWidth = image.naturalWidth;
+    const maxHeight = image.naturalHeight;
+    crop.x = clamp(Number(crop.x) || 0, 0, Math.max(0, maxWidth - 1));
+    crop.y = clamp(Number(crop.y) || 0, 0, Math.max(0, maxHeight - 1));
+    crop.width = clamp(Number(crop.width) || 1, 1, maxWidth - crop.x);
+    crop.height = clamp(Number(crop.height) || 1, 1, maxHeight - crop.y);
+    if (ratio) {
+      if (changed === "height") crop.width = crop.height * ratio;
+      else crop.height = crop.width / ratio;
+      if (crop.width > maxWidth - crop.x) { crop.width = maxWidth - crop.x; crop.height = crop.width / ratio; }
+      if (crop.height > maxHeight - crop.y) { crop.height = maxHeight - crop.y; crop.width = crop.height * ratio; }
+    }
+    return crop;
+  }
+
+  function syncCropInputs() {
+    const crop = state.cropSession?.crop;
+    if (!crop) return;
+    els.cropX.value = Math.round(crop.x);
+    els.cropY.value = Math.round(crop.y);
+    els.cropWidth.value = Math.round(crop.width);
+    els.cropHeight.value = Math.round(crop.height);
+  }
+
+  function updateCropFromInputs(changed) {
+    const session = state.cropSession;
+    if (!session) return;
+    session.crop = normalizeCrop({
+      x: Number(els.cropX.value), y: Number(els.cropY.value),
+      width: Number(els.cropWidth.value), height: Number(els.cropHeight.value)
+    }, session.image, changed);
+    syncCropInputs(); drawCropEditor();
+  }
+
+  function drawCropEditor() {
+    const session = state.cropSession;
+    if (!session || !els.cropDialog.open) return;
+    const canvas = els.cropCanvas;
+    const image = session.image;
+    const padding = 24;
+    const scale = Math.min((canvas.width - padding * 2) / image.naturalWidth, (canvas.height - padding * 2) / image.naturalHeight);
+    const width = image.naturalWidth * scale;
+    const height = image.naturalHeight * scale;
+    const left = (canvas.width - width) / 2;
+    const top = (canvas.height - height) / 2;
+    session.view = { scale, left, top, width, height };
+    cropCtx.clearRect(0, 0, canvas.width, canvas.height);
+    cropCtx.fillStyle = "#111827"; cropCtx.fillRect(0, 0, canvas.width, canvas.height);
+    cropCtx.drawImage(image, left, top, width, height);
+    const c = session.crop;
+    const x = left + c.x * scale, y = top + c.y * scale, w = c.width * scale, h = c.height * scale;
+    cropCtx.fillStyle = "rgba(4, 10, 22, .66)";
+    cropCtx.fillRect(left, top, width, Math.max(0, y - top));
+    cropCtx.fillRect(left, y + h, width, Math.max(0, top + height - y - h));
+    cropCtx.fillRect(left, y, Math.max(0, x - left), h);
+    cropCtx.fillRect(x + w, y, Math.max(0, left + width - x - w), h);
+    cropCtx.strokeStyle = "#f2bf64"; cropCtx.lineWidth = 3; cropCtx.strokeRect(x, y, w, h);
+    cropCtx.strokeStyle = "rgba(255,255,255,.55)"; cropCtx.lineWidth = 1;
+    cropCtx.beginPath();
+    cropCtx.moveTo(x + w / 3, y); cropCtx.lineTo(x + w / 3, y + h);
+    cropCtx.moveTo(x + w * 2 / 3, y); cropCtx.lineTo(x + w * 2 / 3, y + h);
+    cropCtx.moveTo(x, y + h / 3); cropCtx.lineTo(x + w, y + h / 3);
+    cropCtx.moveTo(x, y + h * 2 / 3); cropCtx.lineTo(x + w, y + h * 2 / 3); cropCtx.stroke();
+    cropCtx.fillStyle = "#f2bf64"; cropCtx.fillRect(x + w - 9, y + h - 9, 18, 18);
+  }
+
+  function cropCanvasPoint(event) {
+    const rect = els.cropCanvas.getBoundingClientRect();
+    return { x: (event.clientX - rect.left) * els.cropCanvas.width / rect.width, y: (event.clientY - rect.top) * els.cropCanvas.height / rect.height };
+  }
+
+  function startCropInteraction(event) {
+    const session = state.cropSession;
+    if (!session?.view) return;
+    const point = cropCanvasPoint(event);
+    const { scale, left, top } = session.view;
+    const c = session.crop;
+    const box = { x: left + c.x * scale, y: top + c.y * scale, width: c.width * scale, height: c.height * scale };
+    const nearHandle = Math.abs(point.x - (box.x + box.width)) < 24 && Math.abs(point.y - (box.y + box.height)) < 24;
+    const inside = point.x >= box.x && point.x <= box.x + box.width && point.y >= box.y && point.y <= box.y + box.height;
+    if (!nearHandle && !inside) return;
+    session.drag = { mode: nearHandle ? "resize" : "move", pointerId: event.pointerId, point, crop: { ...c } };
+    els.cropCanvas.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  }
+
+  function moveCropInteraction(event) {
+    const session = state.cropSession;
+    const drag = session?.drag;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const point = cropCanvasPoint(event);
+    const dx = (point.x - drag.point.x) / session.view.scale;
+    const dy = (point.y - drag.point.y) / session.view.scale;
+    const crop = { ...drag.crop };
+    if (drag.mode === "move") {
+      crop.x = clamp(drag.crop.x + dx, 0, session.image.naturalWidth - crop.width);
+      crop.y = clamp(drag.crop.y + dy, 0, session.image.naturalHeight - crop.height);
+    } else {
+      crop.width = Math.max(1, drag.crop.width + dx);
+      crop.height = Math.max(1, drag.crop.height + dy);
+      normalizeCrop(crop, session.image, Math.abs(dx) >= Math.abs(dy) ? "width" : "height");
+    }
+    session.crop = crop; syncCropInputs(); drawCropEditor();
+  }
+
+  function endCropInteraction(event) {
+    if (state.cropSession?.drag?.pointerId === event.pointerId) state.cropSession.drag = null;
+  }
+
+  async function applyCrop() {
+    const session = state.cropSession;
+    if (!session) return;
+    const crop = normalizeCrop({ ...session.crop }, session.image);
+    const width = Math.max(1, Math.round(crop.width));
+    const height = Math.max(1, Math.round(crop.height));
+    const canvas = document.createElement("canvas"); canvas.width = width; canvas.height = height;
+    const ctx = canvas.getContext("2d"); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(session.image, crop.x, crop.y, crop.width, crop.height, 0, 0, width, height);
+    const src = canvas.toDataURL("image/png");
+    const image = await loadImage(src);
+    if (session.kind === "background") {
+      state.backgroundImage = image;
+      state.backgroundCrop = crop;
+      setDesignSize(width, height);
+      renderAll();
+      showToast(`Background cropped · canvas is now ${width} × ${height}`);
+    } else {
+      const item = state.images.find((candidate) => candidate.id === session.targetId);
+      if (!item) return;
+      item.image = image; item.src = src; item.crop = crop;
+      item.height = item.width * height / width;
+      if (item.height > DESIGN.height) { item.height = DESIGN.height; item.width = item.height * width / height; }
+      item.x = clamp(item.x, 0, Math.max(0, DESIGN.width - item.width));
+      item.y = clamp(item.y, 0, Math.max(0, DESIGN.height - item.height));
+      renderFields(); renderFieldList(); populateForm();
+      showToast(`Picture cropped to ${width} × ${height}`);
+    }
+    els.cropDialog.close(); state.cropSession = null;
   }
 
   function addField() {
@@ -790,7 +984,7 @@
   }
 
   function resetApp() {
-    state.backgroundImage = null; state.backgroundName = "Sample template";
+    state.backgroundImage = null; state.backgroundSourceImage = null; state.backgroundSourceSrc = null; state.backgroundCrop = null; state.backgroundName = "Sample template";
     setDesignSize(1200, 848);
     state.records = clone(sampleRecords); state.fields = clone(sampleFields); state.images = []; state.currentRecord = 0; state.selectedField = "name";
     renderAll(); showToast("Sample certificate restored");
@@ -798,8 +992,10 @@
 
   els.dataUpload.addEventListener("change", handleDataUpload);
   els.backgroundUpload.addEventListener("change", handleBackgroundUpload);
+  els.cropBackground.addEventListener("click", () => openCropEditor("background"));
   els.imageElementUpload.addEventListener("change", handleImageElementUpload);
   els.replaceImageUpload.addEventListener("change", handleReplaceImage);
+  els.cropImage.addEventListener("click", () => openCropEditor("image"));
   els.fontUpload.addEventListener("change", handleFontUpload);
   els.exportQuality.addEventListener("change", (event) => {
     state.exportQuality = event.target.value;
@@ -807,7 +1003,7 @@
     renderData();
     showToast(`${preset.label} export selected · ${preset.scale}× resolution`);
   });
-  els.clearBackground.addEventListener("click", () => { state.backgroundImage = null; state.backgroundName = "Sample template"; setDesignSize(1200, 848); renderAll(); showToast("Sample template restored"); });
+  els.clearBackground.addEventListener("click", () => { state.backgroundImage = null; state.backgroundSourceImage = null; state.backgroundSourceSrc = null; state.backgroundCrop = null; state.backgroundName = "Sample template"; setDesignSize(1200, 848); renderAll(); showToast("Sample template restored"); });
   els.recordSelect.addEventListener("change", () => { state.currentRecord = Number(els.recordSelect.value); renderData(); renderFields(); });
   els.previousRecord.addEventListener("click", () => { state.currentRecord = (state.currentRecord - 1 + state.records.length) % state.records.length; renderData(); renderFields(); });
   els.nextRecord.addEventListener("click", () => { state.currentRecord = (state.currentRecord + 1) % state.records.length; renderData(); renderFields(); });
@@ -844,6 +1040,19 @@
   els.stage.addEventListener("pointerup", endFieldInteraction);
   els.stage.addEventListener("pointercancel", endFieldInteraction);
   els.stage.addEventListener("keydown", handleStageKeydown);
+  els.cropAspect.addEventListener("change", () => {
+    const ratio = cropRatio();
+    if (ratio) fitCropToRatio(ratio);
+    else { syncCropInputs(); drawCropEditor(); }
+  });
+  [[els.cropX, "x"], [els.cropY, "y"], [els.cropWidth, "width"], [els.cropHeight, "height"]].forEach(([input, key]) => input.addEventListener("change", () => updateCropFromInputs(key)));
+  els.cropReset.addEventListener("click", () => { if (!state.cropSession) return; state.cropSession.crop = fullImageCrop(state.cropSession.image); els.cropAspect.value = "free"; syncCropInputs(); drawCropEditor(); });
+  els.cropApply.addEventListener("click", () => applyCrop().catch((error) => { console.error("Crop failed", error); showToast("The crop could not be applied.", true); }));
+  els.cropCanvas.addEventListener("pointerdown", startCropInteraction);
+  els.cropCanvas.addEventListener("pointermove", moveCropInteraction);
+  els.cropCanvas.addEventListener("pointerup", endCropInteraction);
+  els.cropCanvas.addEventListener("pointercancel", endCropInteraction);
+  els.cropDialog.addEventListener("close", () => { state.cropSession = null; });
   els.reset.addEventListener("click", resetApp);
   els.downloadPng.addEventListener("click", () => downloadCurrentPng().catch(() => showToast("PNG export failed.", true)));
   els.downloadPdf.addEventListener("click", () => downloadCurrentPdf().catch(() => showToast("PDF export failed.", true)));

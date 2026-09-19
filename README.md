@@ -11,7 +11,7 @@ No recipient data or uploaded artwork leaves the browser. The app has no backend
 - CSV files with any header names; headers become placeholders such as `{{name}}`
 - TXT files with one recipient name per line
 - PNG, JPEG, or WebP backgrounds that set the certificate's native dimensions
-- Multiple independently movable, resizable, replaceable picture layers
+- Multiple independently movable, resizable, replaceable, and croppable picture layers
 - Fixed text and variable placeholder fields
 - Local custom font uploads (`.ttf`, `.otf`, `.woff`, and `.woff2`)
 - Drag, resize, nudge, style, align, add, and delete text and picture layers
@@ -42,9 +42,9 @@ Custom fonts must be reselected after reloading the page. Ensure that the font's
 
 ## Backgrounds and picture layers
 
-Uploading a background changes the certificate canvas to the image's exact pixel dimensions. Existing text and picture positions are scaled proportionally so the layout stays aligned.
+Uploading a background changes the certificate canvas to the image's exact pixel dimensions. Use **Crop background** to choose only the area you need; the certificate then adopts the cropped image's exact dimensions and aspect ratio. Existing text and picture positions are scaled proportionally so the layout stays aligned.
 
-Use **Add picture** to place logos, signatures, portraits, seals, or other artwork above the background. You can add multiple pictures, then move, resize, adjust opacity, replace, or delete each layer independently. Picture layers are included in PNG, PDF, and ZIP exports and never leave the browser.
+Use **Add picture** to place logos, signatures, portraits, seals, or other artwork above the background. You can add multiple pictures, then crop, move, resize, adjust opacity, replace, or delete each layer independently. The crop editor supports freeform, square, 4:3, 16:9, and current-certificate aspect ratios. Picture layers are included in PNG, PDF, and ZIP exports and never leave the browser.
 
 ## Export quality
 
