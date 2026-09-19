@@ -8,9 +8,9 @@
     xhigh: { label: "XHigh", scale: 3, jpegQuality: 1 }
   };
   const sampleRecords = [
-    { name: "Avinash Kumar", course: "Discover Camp", date: "19 September 2026", organization: "RAD@home India" },
-    { name: "Lorem Ipsum", course: "Discover Camp", date: "19 September 2026", organization: "RAD@home India" },
-    { name: "Name Surname", course: "Discover Camp", date: "19 September 2026", organization: "RAD@home India" }
+    { name: "Avinash Kumar", course: "Discovery Camp", date: "19 September 2026", organization: "RAD@home India" },
+    { name: "Lorem Ipsum", course: "Discovery Camp", date: "19 September 2026", organization: "RAD@home India" },
+    { name: "Name Surname", course: "Discovery Camp", date: "19 September 2026", organization: "RAD@home India" }
   ];
 
   const sampleFields = [
