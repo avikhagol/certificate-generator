@@ -77,3 +77,4 @@ README.md
 ## Browser support
 
 Use a current version of Chrome, Edge, Firefox, or Safari. Large batches are generated in memory; for hundreds of high-resolution certificates, split the input into smaller files if the browser becomes memory-constrained.
+# certificate-generator
