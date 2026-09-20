@@ -294,8 +294,7 @@ textarea { resize: vertical; line-height: 1.4; }
   padding: 34px;
   display: grid;
   place-items: safe center;   /* "safe" keeps the top-left reachable when zoomed past the shell */
-  overflow: auto;
-  overscroll-behavior: contain;
+  overflow: hidden;           /* .zoomed turns this into a scroll container; see fitStage() */
   background-color: #dfe4eb;
   background-image: radial-gradient(#c7ced8 1px, transparent 1px);
   background-size: 18px 18px;
@@ -314,6 +313,7 @@ textarea { resize: vertical; line-height: 1.4; }
   touch-action: none;
 }
 
+.canvas-shell.zoomed { overflow: auto; }
 .canvas-shell.panning { cursor: grabbing; }
 .stage-viewport { position: relative; flex: none; }
 .stage-viewport .certificate-stage { position: absolute; inset: 0 auto auto 0; }

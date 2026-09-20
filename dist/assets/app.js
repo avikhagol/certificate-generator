@@ -931,6 +931,10 @@
   function fitStage() {
     const fit = fitScale();
     state.scale = state.zoom === "fit" ? fit : clamp(state.zoom, minZoom(), maxZoom());
+    // Only pan the canvas once it is actually bigger than the shell. While the
+    // whole canvas is visible the shell must not be a scroll container at all,
+    // or it would swallow the wheel instead of scrolling the page.
+    els.shell.classList.toggle("zoomed", state.scale > fit + 0.0001);
     els.stage.style.transform = `scale(${state.scale})`;
     els.stageViewport.style.width = `${DESIGN.width * state.scale}px`;
     els.stageViewport.style.height = `${DESIGN.height * state.scale}px`;
