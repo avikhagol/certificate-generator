@@ -75,6 +75,28 @@
         </label>
         <button class="text-button" id="sampleDataButton" type="button">Restore sample data</button>
 
+        <div class="photo-library">
+          <div class="section-title-row">
+            <h2>Recipient photos</h2>
+          </div>
+          <div class="photo-library-actions">
+            <label class="button button-quiet upload-button" for="photoFolderInput" title="Pick a folder of images; nothing is uploaded">
+              Link photo folder
+              <input id="photoFolderInput" type="file" accept="image/png,image/jpeg,image/webp" multiple webkitdirectory hidden />
+            </label>
+            <label class="text-button upload-button" for="photoFilesInput">
+              or pick files
+              <input id="photoFilesInput" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden />
+            </label>
+          </div>
+          <p class="photo-library-status" id="photoLibraryStatus">No photo folder linked</p>
+          <div class="photo-library-links">
+            <button class="text-button" id="photoReportButton" type="button" hidden>Match report</button>
+            <button class="text-button" id="photoUnlinkButton" type="button" hidden>Unlink</button>
+          </div>
+          <p class="photo-library-hint">Matched by filename against a column in your CSV. Files stay on this device and are not saved into project files.</p>
+        </div>
+
         <div class="section-title-row">
           <h2>Preview record</h2>
           <span id="recordPosition">1 / 3</span>
@@ -139,6 +161,7 @@
               <input id="imageElementUpload" type="file" accept="image/png,image/jpeg,image/webp" hidden />
             </label>
             <button class="button button-quiet" id="clearBackgroundButton" type="button">Use sample template</button>
+            <button class="button button-quiet" id="blankTemplateButton" type="button" title="Clear every layer and start on a white canvas">Blank template</button>
             <span class="zoom-label" id="zoomLabel">100%</span>
           </div>
         </div>
@@ -162,6 +185,7 @@
           <div class="layer-actions">
             <button class="button button-quiet layer-add-button" id="addFieldButton" type="button">+ Text</button>
             <label class="button button-quiet layer-add-button" for="imageElementUpload">+ Picture</label>
+            <button class="button button-quiet layer-add-button" id="addPhotoButton" type="button">+ Photo</button>
           </div>
         </div>
         <div class="layers" id="fieldList"></div>
@@ -250,6 +274,51 @@
           <p class="image-layer-hint">Add as many pictures as needed. Each layer can be moved, resized, replaced, or removed independently.</p>
         </form>
 
+        <form id="photoForm" class="field-form photo-form" autocomplete="off" hidden>
+          <div class="form-grid">
+            <label>
+              <span class="form-label">CSV column</span>
+              <select id="photoColumn" aria-label="Column holding the photo filename"></select>
+            </label>
+            <label>
+              <span class="form-label">Fit</span>
+              <select id="photoFit">
+                <option value="cover">Cover · fill and crop</option>
+                <option value="contain">Contain · fit inside</option>
+                <option value="fill">Fill · stretch</option>
+              </select>
+            </label>
+            <label>
+              <span class="form-label">Shape</span>
+              <select id="photoShape">
+                <option value="rect">Rectangle</option>
+                <option value="circle">Circle</option>
+              </select>
+            </label>
+            <label>
+              <span class="form-label">If missing</span>
+              <select id="photoMissing">
+                <option value="skip">Leave empty</option>
+                <option value="placeholder">Draw placeholder</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="form-grid positions-grid">
+            <label><span class="form-label">X</span><input id="photoX" type="number" min="0" /></label>
+            <label><span class="form-label">Y</span><input id="photoY" type="number" min="0" /></label>
+            <label><span class="form-label">Width</span><input id="photoWidth" type="number" min="40" /></label>
+            <label><span class="form-label">Height</span><input id="photoHeight" type="number" min="40" /></label>
+            <label class="rotation-field"><span class="form-label">Rotation</span><div class="unit-input"><input id="photoRotation" type="number" min="-180" max="180" step="1" /><span>°</span></div></label>
+          </div>
+
+          <label>
+            <span class="form-label">Opacity</span>
+            <div class="range-row"><input id="photoOpacity" type="range" min="10" max="100" step="1" /><output id="photoOpacityValue">100%</output></div>
+          </label>
+          <p class="photo-match-note" id="photoMatchNote"></p>
+        </form>
+
         <div class="export-summary">
           <span class="export-icon" aria-hidden="true">✓</span>
           <div><strong>Export quality</strong><span id="exportSummary">3 certificates · XHigh · 3600 × 2544</span></div>
@@ -268,6 +337,26 @@
         <button class="button button-accent" id="restoreApplyButton" type="button">Restore</button>
       </div>
     </div>
+
+    <dialog class="crop-dialog report-dialog" id="photoReportDialog" aria-labelledby="photoReportTitle">
+      <form method="dialog" class="crop-card">
+        <div class="crop-heading">
+          <div>
+            <p class="eyebrow">Recipient photos</p>
+            <h2 id="photoReportTitle">Match report</h2>
+          </div>
+          <button class="crop-close" type="submit" value="close" aria-label="Close match report">×</button>
+        </div>
+        <p class="report-summary" id="photoReportSummary"></p>
+        <div class="report-scroll">
+          <table class="data-table"><tbody id="photoReportRows"></tbody></table>
+        </div>
+        <div class="report-actions">
+          <button class="button button-quiet" id="photoReportClose" type="submit" value="close">Close</button>
+          <button class="button button-primary" id="photoReportProceed" type="submit" value="proceed">Export anyway</button>
+        </div>
+      </form>
+    </dialog>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <div class="progress-overlay" id="progressOverlay" hidden>

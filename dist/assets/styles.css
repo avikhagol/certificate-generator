@@ -435,6 +435,26 @@ textarea { resize: vertical; line-height: 1.4; }
 .crop-actions { display: grid; grid-template-columns: auto 1fr auto auto; gap: 8px; margin-top: 15px; }
 .crop-actions .button { min-width: 112px; }
 
+/* recipient photo library + per-record photo layers */
+.photo-library { margin-top: 16px; padding-top: 4px; border-top: 1px solid var(--line); }
+.photo-library-actions { display: grid; gap: 4px; }
+.photo-library-actions .button { width: 100%; justify-content: center; }
+.photo-library-status { margin: 8px 0 0; color: var(--muted); font-size: .72rem; line-height: 1.45; }
+.photo-library-links { display: flex; gap: 10px; }
+.photo-library-links .text-button { width: auto; padding: 6px 0; text-align: left; }
+.photo-library-hint { margin: 2px 0 0; color: var(--muted); font-size: .66rem; line-height: 1.45; }
+.photo-match-note { margin: 9px 0 0; color: var(--muted); font-size: .7rem; word-break: break-word; }
+
+.canvas-field.photo-field img { object-position: center; }
+.canvas-field.photo-missing { border: 1px dashed #b9c3d4; background: rgba(238, 241, 246, .75); }
+.photo-missing-note { width: 100%; color: var(--muted); font-size: .7rem; text-align: center; pointer-events: none; }
+
+.report-dialog { width: min(620px, calc(100vw - 28px)); }
+.report-summary { margin: 0 0 10px; font-size: .8rem; }
+.report-scroll { max-height: 46vh; overflow: auto; border: 1px solid var(--line); border-radius: 8px; }
+.report-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 15px; }
+.report-actions .button { min-width: 112px; }
+
 @media (max-width: 1120px) {
   .studio { grid-template-columns: 230px minmax(420px, 1fr); }
   .properties-panel { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--line); display: grid; grid-template-columns: minmax(220px, .7fr) 1.3fr; gap: 20px; }

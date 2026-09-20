@@ -30,6 +30,9 @@
     records: structuredClone(sampleRecords),
     fields: structuredClone(sampleFields),
     images: [],
+    photos: [],
+    photoLibrary: null,
+    blankBackground: false,
     currentRecord: 0,
     selectedField: "name",
     backgroundImage: null,
@@ -47,7 +50,13 @@
   const $ = (id) => document.getElementById(id);
   const els = {
     stage: $("certificateStage"), stageViewport: $("stageViewport"), shell: $("canvasShell"), background: $("backgroundCanvas"), fieldLayer: $("fieldLayer"),
-    dataUpload: $("dataUpload"), backgroundUpload: $("backgroundUpload"), imageElementUpload: $("imageElementUpload"), replaceImageUpload: $("replaceImageUpload"), fontUpload: $("fontUpload"), clearBackground: $("clearBackgroundButton"), cropBackground: $("cropBackgroundButton"), cropImage: $("cropImageButton"),
+    dataUpload: $("dataUpload"), photoFolder: $("photoFolderInput"), photoFiles: $("photoFilesInput"), photoStatus: $("photoLibraryStatus"), photoReport: $("photoReportButton"), photoUnlink: $("photoUnlinkButton"),
+    blankTemplate: $("blankTemplateButton"), addPhoto: $("addPhotoButton"),
+    photoForm: $("photoForm"), photoColumn: $("photoColumn"), photoFit: $("photoFit"), photoShape: $("photoShape"), photoMissing: $("photoMissing"),
+    photoX: $("photoX"), photoY: $("photoY"), photoWidth: $("photoWidth"), photoHeight: $("photoHeight"), photoRotation: $("photoRotation"),
+    photoOpacity: $("photoOpacity"), photoOpacityValue: $("photoOpacityValue"), photoMatchNote: $("photoMatchNote"),
+    reportDialog: $("photoReportDialog"), reportSummary: $("photoReportSummary"), reportRows: $("photoReportRows"), reportProceed: $("photoReportProceed"), reportClose: $("photoReportClose"),
+    backgroundUpload: $("backgroundUpload"), imageElementUpload: $("imageElementUpload"), replaceImageUpload: $("replaceImageUpload"), fontUpload: $("fontUpload"), clearBackground: $("clearBackgroundButton"), cropBackground: $("cropBackgroundButton"), cropImage: $("cropImageButton"),
     recordCount: $("recordCount"), recordPosition: $("recordPosition"), recordSelect: $("recordSelect"), recordDetails: $("recordDetails"), chips: $("placeholderChips"),
     previousRecord: $("previousRecord"), nextRecord: $("nextRecord"), sampleData: $("sampleDataButton"),
     fieldList: $("fieldList"), addField: $("addFieldButton"), deleteField: $("deleteFieldButton"), selectedLayerLabel: $("selectedLayerLabel"),
@@ -101,6 +110,184 @@
   }
 
   function clone(value) { return JSON.parse(JSON.stringify(value)); }
+
+  /* ------------------------------------------------ per-record photo layers */
+
+  const PHOTO_TYPES = ["image/png", "image/jpeg", "image/webp"];
+  const PHOTO_CACHE_LIMIT = 24;        // decoded bitmaps kept in memory
+  const photoCache = new Map();        // cacheKey -> downscaled <canvas>
+
+  /** Strict key: a filename compared case- and accent-insensitively. */
+  function exactKey(value) {
+    return String(value).trim().normalize("NFC").toLowerCase();
+  }
+
+  /** Loose key: also drops accents and every separator, so "Ada Lovelace.JPG"
+   *  still finds "ada-lovelace.jpg". Only consulted after exact keys fail. */
+  function looseKey(value) {
+    return String(value).trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  }
+
+  const baseName = (value) => String(value).replace(/\\/g, "/").split("/").pop().trim();
+  const stripExtension = (value) => String(value).replace(/\.[^.]+$/, "");
+
+  /**
+   * Index the files the user handed us. The CSV never gives us a path we can
+   * open — a browser cannot read one — so every value is reduced to a lookup
+   * key and matched against files the user explicitly picked.
+   */
+  function buildPhotoLibrary(fileList, folderName) {
+    const files = Array.from(fileList || []).filter((file) => PHOTO_TYPES.includes(file.type));
+    const exact = new Map();
+    const loose = new Map();
+    const collisions = [];
+    files.forEach((file) => {
+      const relative = file.webkitRelativePath || file.name;
+      const name = baseName(relative);
+      const keys = [exactKey(relative), exactKey(name), exactKey(stripExtension(name))];
+      keys.forEach((key) => { if (key && !exact.has(key)) exact.set(key, file); });
+      [looseKey(name), looseKey(stripExtension(name))].forEach((key) => {
+        if (!key) return;
+        if (loose.has(key) && loose.get(key) !== file) collisions.push(name);
+        else if (!loose.has(key)) loose.set(key, file);
+      });
+    });
+    return { name: folderName, files, exact, loose, collisions, urls: new Map(), skipped: Array.from(fileList || []).length - files.length };
+  }
+
+  /** Resolve one CSV cell to a picked file, or null when nothing matches. */
+  function findPhotoFile(value) {
+    const library = state.photoLibrary;
+    const raw = String(value ?? "").trim();
+    if (!library || !raw) return null;
+    const name = baseName(raw);
+    const candidates = [exactKey(raw), exactKey(name), exactKey(stripExtension(name))];
+    for (const key of candidates) {
+      if (key && library.exact.has(key)) return library.exact.get(key);
+    }
+    for (const key of [looseKey(name), looseKey(stripExtension(name))]) {
+      if (key && library.loose.has(key)) return library.loose.get(key);
+    }
+    return null;
+  }
+
+  /** Stable object URL per file, used by the DOM preview only. */
+  function photoObjectUrl(file) {
+    const library = state.photoLibrary;
+    if (!library) return "";
+    if (!library.urls.has(file)) library.urls.set(file, URL.createObjectURL(file));
+    return library.urls.get(file);
+  }
+
+  function releasePhotoLibrary() {
+    const library = state.photoLibrary;
+    if (!library) return;
+    library.urls.forEach((url) => URL.revokeObjectURL(url));
+    library.urls.clear();
+    photoCache.clear();
+  }
+
+  /**
+   * Decode a photo once, downscaled to the largest size the layer can actually
+   * need. A 4000x3000 original is ~48MB as RGBA; a 900px copy is a rounding
+   * error, and that difference is what makes a 500-record batch possible.
+   */
+  async function decodePhoto(file, maxWidth) {
+    const url = URL.createObjectURL(file);
+    try {
+      const image = await loadImage(url);
+      const scale = Math.min(1, maxWidth / image.naturalWidth);
+      const width = Math.max(1, Math.round(image.naturalWidth * scale));
+      const height = Math.max(1, Math.round(image.naturalHeight * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = width; canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(image, 0, 0, width, height);
+      return canvas;
+    } finally { URL.revokeObjectURL(url); }
+  }
+
+  async function getPhotoBitmap(file, maxWidth) {
+    const bucket = Math.ceil(maxWidth / 128) * 128;   // avoid a cache entry per pixel
+    const key = `${file.name}|${file.size}|${file.lastModified}|${bucket}`;
+    if (photoCache.has(key)) {
+      const cached = photoCache.get(key);
+      photoCache.delete(key); photoCache.set(key, cached);   // refresh LRU order
+      return cached;
+    }
+    const canvas = await decodePhoto(file, bucket);
+    photoCache.set(key, canvas);
+    while (photoCache.size > PHOTO_CACHE_LIMIT) photoCache.delete(photoCache.keys().next().value);
+    return canvas;
+  }
+
+  /** Decode every photo layer for one record. Callers await this before the
+   *  synchronous renderCertificate(). */
+  async function resolvePhotos(record, scale = 1) {
+    const resolved = new Map();
+    for (const layer of state.photos) {
+      const file = findPhotoFile(record[layer.column]);
+      if (!file) continue;
+      try {
+        resolved.set(layer.id, await getPhotoBitmap(file, Math.max(64, Math.ceil(layer.width * scale))));
+      } catch (error) { console.warn("Photo could not be decoded", file.name, error); }
+    }
+    return resolved;
+  }
+
+  /** How much of the source lands where, for cover / contain / fill. Mirrors
+   *  CSS object-fit so the DOM preview and the canvas export agree. */
+  function photoRects(bitmap, layer) {
+    const bw = bitmap.width, bh = bitmap.height;
+    const box = { dx: layer.x, dy: layer.y, dw: layer.width, dh: layer.height };
+    if (layer.fit === "fill" || !bw || !bh) return { sx: 0, sy: 0, sw: bw, sh: bh, ...box };
+    const boxAspect = layer.width / layer.height;
+    const imageAspect = bw / bh;
+    if (layer.fit === "contain") {
+      let dw = layer.width, dh = layer.height;
+      if (imageAspect > boxAspect) dh = dw / imageAspect; else dw = dh * imageAspect;
+      return { sx: 0, sy: 0, sw: bw, sh: bh, dx: layer.x + (layer.width - dw) / 2, dy: layer.y + (layer.height - dh) / 2, dw, dh };
+    }
+    let sw = bw, sh = bh;
+    if (imageAspect > boxAspect) sw = bh * boxAspect; else sh = bw / boxAspect;
+    return { sx: (bw - sw) / 2, sy: (bh - sh) / 2, sw, sh, ...box };
+  }
+
+  function photoLayer(column) {
+    const width = Math.min(260, DESIGN.width * 0.22);
+    const height = width;
+    return {
+      id: `photo-${Date.now()}`,
+      column,
+      x: (DESIGN.width - width) / 2, y: DESIGN.height * 0.24,
+      width, height, opacity: 1, rotation: 0,
+      fit: "cover", shape: "rect", missing: "skip"
+    };
+  }
+
+  /** Which records resolve, and which do not. Run before a batch, not after. */
+  function photoMatchReport() {
+    const missing = [];
+    let matched = 0;
+    state.records.forEach((record, index) => {
+      state.photos.forEach((layer) => {
+        const value = String(record[layer.column] ?? "").trim();
+        if (findPhotoFile(value)) matched++;
+        else missing.push({ index, label: record.name || record[Object.keys(record)[0]] || `Record ${index + 1}`, column: layer.column, value });
+      });
+    });
+    return { total: state.records.length * state.photos.length, matched, missing };
+  }
+
+  /** Columns whose values all look like image filenames. */
+  function detectPhotoColumns() {
+    return uniqueKeys().filter((key) => {
+      const values = state.records.map((record) => String(record[key] ?? "").trim()).filter(Boolean);
+      if (values.length < Math.max(1, state.records.length * 0.6)) return false;
+      return values.every((value) => /\.(png|jpe?g|webp)$/i.test(value));
+    });
+  }
 
   function drawDefaultTemplate(ctx) {
     const { width: w, height: h } = DESIGN;
@@ -168,6 +355,9 @@
       ctx.fillStyle = "#fff";
       ctx.fillRect(0, 0, DESIGN.width, DESIGN.height);
       ctx.drawImage(state.backgroundImage, 0, 0, DESIGN.width, DESIGN.height);
+    } else if (state.blankBackground) {
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, DESIGN.width, DESIGN.height);
     } else {
       drawDefaultTemplate(ctx);
     }
@@ -183,7 +373,7 @@
     const ratioX = nextWidth / DESIGN.width;
     const ratioY = nextHeight / DESIGN.height;
     const sizeRatio = Math.min(ratioX, ratioY);
-    [...state.fields, ...state.images].forEach((item) => {
+    [...state.fields, ...state.images, ...state.photos].forEach((item) => {
       item.x *= ratioX;
       item.y *= ratioY;
       item.width *= ratioX;
@@ -202,14 +392,23 @@
     els.imageX.max = nextWidth;
     els.imageY.max = nextHeight;
     els.imageWidth.max = nextWidth;
+    els.photoX.max = nextWidth;
+    els.photoY.max = nextHeight;
+    els.photoWidth.max = nextWidth;
+    els.photoHeight.max = nextHeight;
   }
 
   function getSelectedField() { return state.fields.find((item) => item.id === state.selectedField); }
   function getSelectedImage() { return state.images.find((item) => item.id === state.selectedField); }
-  function getSelectedItem() { return getSelectedField() || getSelectedImage(); }
+  function getSelectedPhoto() { return state.photos.find((item) => item.id === state.selectedField); }
+  function getSelectedItem() { return getSelectedField() || getSelectedImage() || getSelectedPhoto(); }
+  function findItem(id) {
+    return state.fields.find((item) => item.id === id) || state.images.find((item) => item.id === id) || state.photos.find((item) => item.id === id);
+  }
 
   function renderAll() {
     els.cropBackground.disabled = !state.backgroundSourceImage;
+    updatePhotoStatus();
     drawBackground(bgCtx);
     renderData();
     renderFields();
@@ -269,6 +468,30 @@
       node.addEventListener("pointerdown", startFieldInteraction);
       fragment.append(node);
     });
+    state.photos.forEach((item) => {
+      const file = findPhotoFile(record[item.column]);
+      const node = document.createElement("div");
+      node.className = `canvas-field image-field photo-field${item.id === state.selectedField ? " selected" : ""}${file ? "" : " photo-missing"}`;
+      node.dataset.id = item.id;
+      const circle = item.shape === "circle";
+      node.style.cssText = `left:${item.x}px;top:${item.y}px;width:${item.width}px;height:${item.height}px;opacity:${item.opacity};${circle ? "border-radius:50%;" : ""}${rotationStyle(item, item.height / 2)}`;
+      if (file) {
+        const image = document.createElement("img");
+        image.src = photoObjectUrl(file);
+        image.alt = "";
+        image.style.objectFit = item.fit === "fill" ? "fill" : item.fit;
+        if (circle) image.style.borderRadius = "50%";
+        node.append(image);
+      } else {
+        const note = document.createElement("span");
+        note.className = "photo-missing-note";
+        note.textContent = `{{${item.column}}}`;
+        node.append(note);
+      }
+      node.append(resizeHandle(), rotateHandle(item));
+      node.addEventListener("pointerdown", startFieldInteraction);
+      fragment.append(node);
+    });
     state.fields.forEach((item) => {
       const node = document.createElement("div");
       node.className = `canvas-field${item.id === state.selectedField ? " selected" : ""}`;
@@ -308,8 +531,9 @@
 
   function renderFieldList() {
     const imageButtons = state.images.map((item, index) => createLayerButton(item, "image", index));
+    const photoButtons = state.photos.map((item, index) => createLayerButton(item, "photo", index));
     const textButtons = state.fields.map((item, index) => createLayerButton(item, "text", index));
-    els.fieldList.replaceChildren(...imageButtons, ...textButtons);
+    els.fieldList.replaceChildren(...imageButtons, ...photoButtons, ...textButtons);
   }
 
   function createLayerButton(item, type, index) {
@@ -317,10 +541,11 @@
       button.type = "button";
       button.className = `layer-button${item.id === state.selectedField ? " selected" : ""}`;
       button.dataset.id = item.id;
-      const icon = document.createElement("span"); icon.className = "layer-icon"; icon.textContent = type === "image" ? "▧" : "T";
+      const icon = document.createElement("span"); icon.className = "layer-icon"; icon.textContent = type === "image" ? "▧" : type === "photo" ? "◉" : "T";
       const copy = document.createElement("span"); copy.className = "layer-copy";
-      const title = document.createElement("strong"); title.textContent = type === "image" ? item.name : displayFieldName(item, index);
-      const base = type === "image" ? `${Math.round(item.width)} × ${Math.round(item.height)} px` : item.text.replace(/\n/g, " ");
+      const title = document.createElement("strong");
+      title.textContent = type === "image" ? item.name : type === "photo" ? `{{${item.column}}}` : displayFieldName(item, index);
+      const base = type === "image" || type === "photo" ? `${Math.round(item.width)} × ${Math.round(item.height)} px` : item.text.replace(/\n/g, " ");
       const angle = normalizeRotation(item.rotation);
       const subtitle = document.createElement("span"); subtitle.textContent = angle ? `${base} · ${angle}°` : base;
       copy.append(title, subtitle); button.append(icon, copy);
@@ -338,10 +563,26 @@
   function populateForm() {
     const textItem = getSelectedField();
     const imageItem = getSelectedImage();
+    const photoItem = getSelectedPhoto();
     els.fieldForm.toggleAttribute("hidden", !textItem);
     els.imageForm.toggleAttribute("hidden", !imageItem);
-    els.deleteField.disabled = !textItem && !imageItem;
-    els.selectedLayerLabel.textContent = imageItem ? "Selected picture" : "Selected text";
+    els.photoForm.toggleAttribute("hidden", !photoItem);
+    els.deleteField.disabled = !textItem && !imageItem && !photoItem;
+    els.selectedLayerLabel.textContent = imageItem ? "Selected picture" : photoItem ? "Selected photo" : textItem ? "Selected text" : "No layer selected";
+    if (photoItem) {
+      syncPhotoColumns(photoItem);
+      els.photoFit.value = photoItem.fit;
+      els.photoShape.value = photoItem.shape;
+      els.photoMissing.value = photoItem.missing;
+      els.photoX.value = Math.round(photoItem.x);
+      els.photoY.value = Math.round(photoItem.y);
+      els.photoWidth.value = Math.round(photoItem.width);
+      els.photoHeight.value = Math.round(photoItem.height);
+      els.photoRotation.value = normalizeRotation(photoItem.rotation);
+      els.photoOpacity.value = Math.round(photoItem.opacity * 100);
+      els.photoOpacityValue.textContent = `${Math.round(photoItem.opacity * 100)}%`;
+      updatePhotoMatchNote(photoItem);
+    }
     if (textItem) {
       els.fieldText.value = textItem.text;
       els.fieldFont.value = textItem.font;
@@ -408,11 +649,12 @@
       renderFieldList(); populateForm();
     }
     const item = getSelectedItem();
-    const isImage = Boolean(getSelectedImage());
+    const isPhoto = Boolean(getSelectedPhoto());
+    const isImage = Boolean(getSelectedImage()) || isPhoto;
     const resizing = event.target.classList.contains("resize-handle");
     const rotating = event.target.classList.contains("rotate-handle");
     state.interaction = {
-      id, isImage, resizing, rotating, pointerId: event.pointerId, startX: event.clientX, startY: event.clientY,
+      id, isImage, isPhoto, resizing, rotating, pointerId: event.pointerId, startX: event.clientX, startY: event.clientY,
       x: item.x, y: item.y, width: item.width, height: item.height, size: item.size,
       rotation: normalizeRotation(item.rotation)
     };
@@ -434,7 +676,8 @@
   function moveFieldInteraction(event) {
     const action = state.interaction;
     if (!action || action.pointerId !== event.pointerId) return;
-    const item = state.fields.find((candidate) => candidate.id === action.id) || state.images.find((candidate) => candidate.id === action.id);
+    const item = findItem(action.id);
+    if (!item) return;
     const dx = (event.clientX - action.startX) / state.scale;
     const dy = (event.clientY - action.startY) / state.scale;
     if (action.rotating) {
@@ -449,7 +692,12 @@
       const sin = Math.sin(radians);
       const localDx = dx * cos + dy * sin;
       const localDy = -dx * sin + dy * cos;
-      if (action.isImage) {
+      if (action.isPhoto) {
+        // A photo box is free-form: the fit mode, not the box, follows the
+        // bitmap's aspect ratio, which differs for every recipient anyway.
+        item.width = clamp(action.width + localDx, 40, DESIGN.width);
+        item.height = clamp(action.height + localDy, 40, DESIGN.height);
+      } else if (action.isImage) {
         const aspect = action.width / action.height;
         const maxWidth = Math.min(DESIGN.width - item.x, (DESIGN.height - item.y) * aspect);
         item.width = clamp(action.width + localDx, 40, maxWidth);
@@ -519,8 +767,12 @@
       const records = file.name.toLowerCase().endsWith(".csv") ? parseCsv(text) : parseTxt(text);
       if (!records.length) throw new Error("No records were found.");
       state.records = records; state.currentRecord = 0;
-      renderData(); renderFields();
+      renderData(); renderFields(); updatePhotoStatus();
       showToast(`${records.length} records loaded from ${file.name}`);
+      const detected = detectPhotoColumns();
+      if (detected.length && !state.photos.length) {
+        setTimeout(() => showToast(`"${detected[0]}" looks like image files — add a photo layer with + Photo`), 2800);
+      }
     } catch (error) { showToast(error.message, true); }
     event.target.value = "";
   }
@@ -533,7 +785,7 @@
       const src = await readFileAsDataUrl(file);
       const image = await loadImage(src);
       if (image.naturalWidth * image.naturalHeight > 50000000) throw new Error("Background images must be smaller than 50 megapixels.");
-      state.backgroundImage = image; state.backgroundSourceImage = image; state.backgroundSourceSrc = src; state.backgroundCrop = null; state.backgroundName = file.name;
+      state.backgroundImage = image; state.backgroundSourceImage = image; state.backgroundSourceSrc = src; state.backgroundCrop = null; state.backgroundName = file.name; state.blankBackground = false;
       setDesignSize(image.naturalWidth, image.naturalHeight);
       renderAll();
       showToast(`Canvas resized to ${image.naturalWidth} × ${image.naturalHeight}`);
@@ -838,6 +1090,125 @@
     els.cropDialog.close(); state.cropSession = null;
   }
 
+  /* ----------------------------------------------- photo layer plumbing */
+
+  function syncPhotoColumns(layer) {
+    const keys = uniqueKeys();
+    if (layer.column && !keys.includes(layer.column)) keys.push(layer.column);
+    els.photoColumn.replaceChildren(...keys.map((key) => {
+      const option = document.createElement("option");
+      option.value = key; option.textContent = key;
+      option.selected = key === layer.column;
+      return option;
+    }));
+  }
+
+  function updatePhotoMatchNote(layer) {
+    if (!state.photoLibrary) { els.photoMatchNote.textContent = "Link a photo folder to resolve this column."; return; }
+    const record = state.records[state.currentRecord] || {};
+    const value = String(record[layer.column] ?? "").trim();
+    if (!value) { els.photoMatchNote.textContent = `This record has no value in "${layer.column}".`; return; }
+    const file = findPhotoFile(value);
+    els.photoMatchNote.textContent = file ? `Matched ${file.webkitRelativePath || file.name}` : `No file matches "${value}".`;
+  }
+
+  function updatePhotoStatus() {
+    const library = state.photoLibrary;
+    els.photoReport.toggleAttribute("hidden", !state.photos.length);
+    els.photoUnlink.toggleAttribute("hidden", !library);
+    if (!library) { els.photoStatus.textContent = "No photo folder linked"; return; }
+    const skipped = library.skipped ? ` · ${library.skipped} non-image skipped` : "";
+    let summary = `${library.files.length} image${library.files.length === 1 ? "" : "s"} from ${library.name}${skipped}`;
+    if (state.photos.length) {
+      const report = photoMatchReport();
+      summary += ` · ${report.matched} of ${report.total} matched`;
+    }
+    els.photoStatus.textContent = summary;
+  }
+
+  function linkPhotoLibrary(fileList, folderName) {
+    const library = buildPhotoLibrary(fileList, folderName);
+    if (!library.files.length) { showToast("No PNG, JPEG, or WebP images were found there.", true); return; }
+    releasePhotoLibrary();
+    state.photoLibrary = library;
+    renderAll();
+    const report = state.photos.length ? photoMatchReport() : null;
+    if (report && report.missing.length) showToast(`${library.files.length} images linked · ${report.missing.length} records still unmatched`, true);
+    else showToast(`${library.files.length} images linked from ${library.name}`);
+  }
+
+  function handlePhotoPick(event, isFolder) {
+    const files = event.target.files;
+    if (files && files.length) {
+      const first = files[0];
+      const folder = isFolder && first.webkitRelativePath ? first.webkitRelativePath.split("/")[0] : "selected files";
+      linkPhotoLibrary(files, folder);
+    }
+    event.target.value = "";
+  }
+
+  function unlinkPhotoLibrary() {
+    releasePhotoLibrary();
+    state.photoLibrary = null;
+    renderAll();
+    showToast("Photo folder unlinked");
+  }
+
+  function addPhotoLayer() {
+    const keys = uniqueKeys();
+    if (!keys.length) { showToast("Load recipient data first.", true); return; }
+    const column = detectPhotoColumns()[0] || keys[0];
+    const layer = photoLayer(column);
+    state.photos.push(layer);
+    selectField(layer.id);
+    if (!state.photoLibrary) showToast(`Photo layer added for {{${column}}} · link a photo folder next`);
+    else showToast(`Photo layer added for {{${column}}}`);
+  }
+
+  /** The report people should read before exporting 500 certificates. */
+  function openPhotoReport(allowProceed = false) {
+    const report = photoMatchReport();
+    els.reportSummary.textContent = state.photoLibrary
+      ? `${report.matched} of ${report.total} matched · ${report.missing.length} missing`
+      : `No photo folder is linked, so all ${report.total} photo slots are empty.`;
+    const rows = report.missing.slice(0, 200).map((entry) => {
+      const row = document.createElement("tr");
+      const heading = document.createElement("th");
+      const cell = document.createElement("td");
+      heading.scope = "row";
+      heading.textContent = `${entry.index + 1}. ${entry.label}`;
+      cell.textContent = entry.value ? `${entry.column}: ${entry.value}` : `${entry.column} is empty`;
+      row.append(heading, cell);
+      return row;
+    });
+    if (report.missing.length > 200) {
+      const row = document.createElement("tr");
+      const cell = document.createElement("td");
+      cell.colSpan = 2;
+      cell.textContent = `… and ${report.missing.length - 200} more`;
+      row.append(cell);
+      rows.push(row);
+    }
+    els.reportRows.replaceChildren(...rows);
+    els.reportProceed.toggleAttribute("hidden", !allowProceed);
+    els.reportDialog.returnValue = "close";
+    els.reportDialog.showModal();
+    return new Promise((resolve) => {
+      els.reportDialog.addEventListener("close", () => resolve(els.reportDialog.returnValue === "proceed"), { once: true });
+    });
+  }
+
+  function applyBlankTemplate() {
+    state.backgroundImage = null; state.backgroundSourceImage = null; state.backgroundSourceSrc = null; state.backgroundCrop = null;
+    state.backgroundName = "Blank canvas";
+    state.blankBackground = true;
+    state.fields = []; state.images = []; state.photos = [];
+    state.selectedField = null;
+    state.interaction = null; state.cropSession = null;
+    renderAll();
+    showToast(`Blank ${DESIGN.width} × ${DESIGN.height} canvas ready`);
+  }
+
   function addField() {
     const id = `text-${Date.now()}`;
     state.fields.push(field(id, "New text", 300, 300, 600, 32, 400, "Georgia", "#17223b", "center"));
@@ -845,10 +1216,17 @@
   }
 
   function deleteField() {
+    const photoIndex = state.photos.findIndex((item) => item.id === state.selectedField);
+    if (photoIndex >= 0) {
+      state.photos.splice(photoIndex, 1);
+      state.selectedField = state.fields[0]?.id || state.images[0]?.id || state.photos[0]?.id || null;
+      renderFields(); renderFieldList(); populateForm();
+      return;
+    }
     const imageIndex = state.images.findIndex((item) => item.id === state.selectedField);
     if (imageIndex >= 0) {
       state.images.splice(imageIndex, 1);
-      state.selectedField = state.fields[0]?.id || state.images[0]?.id || null;
+      state.selectedField = state.fields[0]?.id || state.images[0]?.id || state.photos[0]?.id || null;
       renderFields(); renderFieldList(); populateForm();
       return;
     }
@@ -860,7 +1238,7 @@
     renderFields(); renderFieldList(); populateForm();
   }
 
-  function renderCertificate(record, scale = 1) {
+  function renderCertificate(record, scale = 1, photos = null) {
     const canvas = document.createElement("canvas");
     canvas.width = Math.round(DESIGN.width * scale);
     canvas.height = Math.round(DESIGN.height * scale);
@@ -876,9 +1254,34 @@
       ctx.drawImage(item.image, item.x, item.y, item.width, item.height);
       ctx.restore();
     });
+    state.photos.forEach((layer) => drawPhotoLayer(ctx, layer, photos?.get(layer.id) || null));
     ctx.textBaseline = "top";
     state.fields.forEach((item) => drawTextField(ctx, item, resolveText(item.text, record)));
     return canvas;
+  }
+
+  function drawPhotoLayer(ctx, layer, bitmap) {
+    if (!bitmap && layer.missing !== "placeholder") return;
+    ctx.save();
+    ctx.globalAlpha = layer.opacity;
+    applyRotation(ctx, layer, layer.x + layer.width / 2, layer.y + layer.height / 2);
+    if (layer.shape === "circle") {
+      ctx.beginPath();
+      ctx.ellipse(layer.x + layer.width / 2, layer.y + layer.height / 2, layer.width / 2, layer.height / 2, 0, 0, Math.PI * 2);
+      ctx.clip();
+    }
+    if (bitmap) {
+      const rect = photoRects(bitmap, layer);
+      ctx.drawImage(bitmap, rect.sx, rect.sy, rect.sw, rect.sh, rect.dx, rect.dy, rect.dw, rect.dh);
+    } else {
+      ctx.fillStyle = "#eef1f6";
+      ctx.fillRect(layer.x, layer.y, layer.width, layer.height);
+      ctx.strokeStyle = "#b9c3d4";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([7, 6]);
+      ctx.strokeRect(layer.x + 1, layer.y + 1, layer.width - 2, layer.height - 2);
+    }
+    ctx.restore();
   }
 
   function drawTextField(ctx, item, text) {
@@ -939,7 +1342,8 @@
     await ensureFontsReady();
     const record = state.records[state.currentRecord];
     const preset = currentQualityPreset();
-    const blob = await canvasToBlob(renderCertificate(record, preset.scale));
+    const photos = await resolvePhotos(record, preset.scale);
+    const blob = await canvasToBlob(renderCertificate(record, preset.scale, photos));
     downloadBlob(blob, `${safeFilename(record, state.currentRecord)}.png`);
     showToast("PNG downloaded");
   }
@@ -948,7 +1352,8 @@
     await ensureFontsReady();
     const record = state.records[state.currentRecord];
     const preset = currentQualityPreset();
-    const bytes = await makePdf(renderCertificate(record, preset.scale), preset.jpegQuality);
+    const photos = await resolvePhotos(record, preset.scale);
+    const bytes = await makePdf(renderCertificate(record, preset.scale, photos), preset.jpegQuality);
     downloadBlob(new Blob([bytes], { type: "application/pdf" }), `${safeFilename(record, state.currentRecord)}.pdf`);
     showToast("PDF downloaded");
   }
@@ -985,6 +1390,10 @@
   }
 
   async function downloadBatch() {
+    if (state.photos.length) {
+      const report = photoMatchReport();
+      if (report.missing.length && !(await openPhotoReport(true))) { showToast("Batch export cancelled"); return; }
+    }
     setBusy(true);
     try {
       await ensureFontsReady();
@@ -992,7 +1401,8 @@
       const files = [];
       for (let i = 0; i < state.records.length; i++) {
         const record = state.records[i];
-        const canvas = renderCertificate(record, preset.scale);
+        const photos = await resolvePhotos(record, preset.scale);
+        const canvas = renderCertificate(record, preset.scale, photos);
         const base = `${String(i + 1).padStart(3, "0")}-${safeFilename(record, i)}`;
         setProgress(i, state.records.length, `Rendering ${base}`);
         const png = new Uint8Array(await (await canvasToBlob(canvas)).arrayBuffer());
@@ -1085,8 +1495,9 @@
 
   function resetApp() {
     state.backgroundImage = null; state.backgroundSourceImage = null; state.backgroundSourceSrc = null; state.backgroundCrop = null; state.backgroundName = "Sample template";
+    state.blankBackground = false;
     setDesignSize(1200, 848);
-    state.records = clone(sampleRecords); state.fields = clone(sampleFields); state.images = []; state.currentRecord = 0; state.selectedField = "name";
+    state.records = clone(sampleRecords); state.fields = clone(sampleFields); state.images = []; state.photos = []; state.currentRecord = 0; state.selectedField = "name";
     renderAll(); showToast("Sample certificate restored");
   }
 
@@ -1103,7 +1514,27 @@
     renderData();
     showToast(`${preset.label} export selected · ${preset.scale}× resolution`);
   });
-  els.clearBackground.addEventListener("click", () => { state.backgroundImage = null; state.backgroundSourceImage = null; state.backgroundSourceSrc = null; state.backgroundCrop = null; state.backgroundName = "Sample template"; setDesignSize(1200, 848); renderAll(); showToast("Sample template restored"); });
+  els.clearBackground.addEventListener("click", () => { state.backgroundImage = null; state.backgroundSourceImage = null; state.backgroundSourceSrc = null; state.backgroundCrop = null; state.backgroundName = "Sample template"; state.blankBackground = false; setDesignSize(1200, 848); renderAll(); showToast("Sample template restored"); });
+  els.blankTemplate.addEventListener("click", applyBlankTemplate);
+  els.addPhoto.addEventListener("click", addPhotoLayer);
+  els.photoFolder.addEventListener("change", (event) => handlePhotoPick(event, true));
+  els.photoFiles.addEventListener("change", (event) => handlePhotoPick(event, false));
+  els.photoUnlink.addEventListener("click", unlinkPhotoLibrary);
+  els.photoReport.addEventListener("click", () => openPhotoReport(false));
+  els.photoColumn.addEventListener("change", (event) => { updateSelected("column", event.target.value); populateForm(); updatePhotoStatus(); });
+  els.photoFit.addEventListener("change", (event) => updateSelected("fit", event.target.value));
+  els.photoShape.addEventListener("change", (event) => updateSelected("shape", event.target.value));
+  els.photoMissing.addEventListener("change", (event) => updateSelected("missing", event.target.value));
+  els.photoX.addEventListener("input", (event) => updateSelected("x", clamp(Number(event.target.value) || 0, 0, DESIGN.width)));
+  els.photoY.addEventListener("input", (event) => updateSelected("y", clamp(Number(event.target.value) || 0, 0, DESIGN.height)));
+  els.photoWidth.addEventListener("input", (event) => updateSelected("width", clamp(Number(event.target.value) || 40, 40, DESIGN.width)));
+  els.photoHeight.addEventListener("input", (event) => updateSelected("height", clamp(Number(event.target.value) || 40, 40, DESIGN.height)));
+  els.photoRotation.addEventListener("input", (event) => updateSelected("rotation", normalizeRotation(event.target.value)));
+  els.photoOpacity.addEventListener("input", (event) => {
+    const value = clamp(Number(event.target.value) || 100, 10, 100);
+    els.photoOpacityValue.textContent = `${value}%`;
+    updateSelected("opacity", value / 100);
+  });
   els.recordSelect.addEventListener("change", () => { state.currentRecord = Number(els.recordSelect.value); renderData(); renderFields(); });
   els.previousRecord.addEventListener("click", () => { state.currentRecord = (state.currentRecord - 1 + state.records.length) % state.records.length; renderData(); renderFields(); });
   els.nextRecord.addEventListener("click", () => { state.currentRecord = (state.currentRecord + 1) % state.records.length; renderData(); renderFields(); });

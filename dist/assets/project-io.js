@@ -21,12 +21,20 @@
  *                  crop: { x, y, width, height } | null,
  *                  sourceSrc: "data:image/...;base64,..." } ],
  *   "background": { name, sourceSrc: "data:..." | null,
- *                   crop: { x, y, width, height } | null },
+ *                   crop: { x, y, width, height } | null,
+ *                   blank: true | false },
+ *   "photos":  [ { id, column, x, y, width, height, opacity, rotation,
+ *                  fit, shape, missing } ],
  *   "fonts":   [ { family, displayName, fileName, data: "<base64 font file>" } ]
  * }
  *
  * Cropped bitmaps are NOT stored twice: only the original source image plus the
  * crop rectangle are written, and the cropped bitmap is re-derived on load.
+ *
+ * Photo layers store the BINDING only - the column name and the geometry - and
+ * never the recipient photos themselves. Embedding hundreds of photos would
+ * push a project past the autosave limits, and the files are the user's to
+ * keep; the photo folder is re-linked after a project is opened.
  */
 (() => {
   "use strict";
@@ -152,8 +160,15 @@
       background: {
         name: state.backgroundName || "Sample template",
         sourceSrc: state.backgroundSourceSrc || null,
-        crop: normalizeCropRect(state.backgroundCrop)
+        crop: normalizeCropRect(state.backgroundCrop),
+        blank: Boolean(state.blankBackground)
       },
+      photos: (state.photos || []).map((layer) => ({
+        id: layer.id, column: layer.column,
+        x: layer.x, y: layer.y, width: layer.width, height: layer.height,
+        opacity: layer.opacity, rotation: rotation(layer.rotation),
+        fit: layer.fit, shape: layer.shape, missing: layer.missing
+      })),
       fonts: serializeFonts(state.customFonts)
     };
   }
@@ -167,10 +182,11 @@
     const version = Number(data.version);
     if (!Number.isInteger(version) || version < 1) throw new Error("This project file has an invalid version number.");
     if (version > VERSION) throw new Error(`This project was saved by a newer version (v${version}). Update the app to open it.`);
-    if (!Array.isArray(data.fields) || data.fields.length === 0) throw new Error("This project file has no text fields.");
+    if (!Array.isArray(data.fields)) throw new Error("This project file has a damaged text field list.");
     if (!Array.isArray(data.records) || data.records.length === 0) throw new Error("This project file has no recipient records.");
     if (data.images && !Array.isArray(data.images)) throw new Error("This project file has a damaged picture layer list.");
     if (data.fonts && !Array.isArray(data.fonts)) throw new Error("This project file has a damaged font list.");
+    if (data.photos && !Array.isArray(data.photos)) throw new Error("This project file has a damaged photo layer list.");
     if (!isObject(data.design) || !(num(data.design.width) > 0) || !(num(data.design.height) > 0)) {
       throw new Error("This project file has invalid canvas dimensions.");
     }
@@ -183,6 +199,21 @@
       if (!isObject(record)) throw new Error(`Record ${index + 1} in this project file is damaged.`);
     });
     return true;
+  }
+
+  function sanitizePhoto(layer, index) {
+    return {
+      id: String(layer.id || `photo-${Date.now()}-${index}`),
+      column: String(layer.column || ""),
+      x: num(layer.x), y: num(layer.y),
+      width: Math.max(40, num(layer.width, 200)),
+      height: Math.max(40, num(layer.height, 200)),
+      opacity: Math.min(1, Math.max(0, num(layer.opacity, 1))),
+      rotation: rotation(layer.rotation),
+      fit: ["cover", "contain", "fill"].includes(layer.fit) ? layer.fit : "cover",
+      shape: layer.shape === "circle" ? "circle" : "rect",
+      missing: layer.missing === "placeholder" ? "placeholder" : "skip"
+    };
   }
 
   function sanitizeField(item) {
@@ -289,10 +320,15 @@
     // because saved coordinates are already in the saved design space.
     state.fields = [];
     state.images = [];
+    state.photos = [];
     setDesignSize(num(data.design.width, 1200), num(data.design.height, 848));
 
     state.fields = data.fields.map(sanitizeField);
     state.images = images;
+    state.photos = (Array.isArray(data.photos) ? data.photos : [])
+      .filter(isObject)
+      .map(sanitizePhoto)
+      .filter((layer) => layer.column);
     state.records = JSON.parse(JSON.stringify(data.records));
     state.currentRecord = Math.min(Math.max(0, num(data.currentRecord, 0)), state.records.length - 1);
     state.backgroundImage = backgroundImage;
@@ -300,10 +336,11 @@
     state.backgroundSourceSrc = background.sourceSrc || null;
     state.backgroundCrop = backgroundCrop;
     state.backgroundName = String(background.name || (backgroundSourceImage ? "Project background" : "Sample template"));
+    state.blankBackground = Boolean(background.blank) && !backgroundSourceImage;
     state.exportQuality = ["normal", "high", "xhigh"].includes(data.exportQuality) ? data.exportQuality : "xhigh";
     state.interaction = null;
     state.cropSession = null;
-    const allIds = [...state.fields, ...state.images].map((item) => item.id);
+    const allIds = [...state.fields, ...state.images, ...state.photos].map((item) => item.id);
     state.selectedField = allIds.includes(data.selectedField) ? data.selectedField : (state.fields[0]?.id ?? null);
 
     if (els.exportQuality) els.exportQuality.value = state.exportQuality;
@@ -424,7 +461,8 @@
       state.records, state.currentRecord, state.selectedField, state.exportQuality,
       state.fields,
       state.images.map((item) => [item.id, item.name, item.x, item.y, item.width, item.height, item.opacity, rotation(item.rotation), item.crop, (item.sourceSrc || "").length]),
-      state.backgroundName, (state.backgroundSourceSrc || "").length, state.backgroundCrop,
+      state.backgroundName, (state.backgroundSourceSrc || "").length, state.backgroundCrop, Boolean(state.blankBackground),
+      state.photos,
       state.customFonts.map((font) => font.family)
     ]);
   }

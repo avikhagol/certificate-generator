@@ -40,6 +40,7 @@ GitHub strips `<iframe>` from READMEs, so the image above links to the video. Th
 - TXT files with one recipient name per line
 - PNG, JPEG, or WebP backgrounds that set the certificate's native dimensions
 - Multiple independently movable, resizable, replaceable, and croppable picture layers
+- Per-recipient photo layers matched by filename from a local folder
 - Fixed text and variable placeholder fields
 - Local custom font uploads (`.ttf`, `.otf`, `.woff`, and `.woff2`)
 - Drag, resize, rotate, nudge, style, align, add, and delete text and picture layers
@@ -48,6 +49,7 @@ GitHub strips `<iframe>` from READMEs, so the image above links to the video. Th
 - Batch ZIP with high-resolution PNG and PDF folders
 - Save and load complete projects as a single self-contained `.certproj.json` file
 - Automatic IndexedDB autosave with a dismissible restore prompt on the next visit
+- Blank canvas mode for designing from scratch
 - Responsive interface with sample data and a built-in template
 
 ## Data format
@@ -72,7 +74,7 @@ Custom fonts are restored automatically when you load a saved project or accept 
 
 ## Saving and loading projects
 
-Use **Save project** in the top toolbar to download the whole design as a single self-contained `*.certproj.json` file: all text layers, picture layers, their rotation angles, the background image and its crop, canvas dimensions, recipient records, export quality, and every uploaded font file. Images and fonts are embedded as base64, so the file needs no companion assets and can be emailed, archived, or shared.
+Use **Save project** in the top toolbar to download the whole design as a single self-contained `*.certproj.json` file: all text layers, picture layers, photo layer bindings, their rotation angles, the background image and its crop, canvas dimensions, recipient records, export quality, and every uploaded font file. Recipient photos are the one exception — see [Recipient photos](#recipient-photos). Images and fonts are embedded as base64, so the file needs no companion assets and can be emailed, archived, or shared.
 
 Use **Load project** to reopen such a file. Images are rebuilt and custom fonts are re-registered, so the live preview and every export match what was saved. Files that are not valid projects, or that were written by a newer schema version, are rejected with an explanatory message and leave the current design untouched.
 
@@ -89,6 +91,42 @@ The working design is autosaved to IndexedDB in this browser every few seconds a
 Uploading a background changes the certificate canvas to the image's exact pixel dimensions. Use **Crop background** to choose only the area you need; the certificate then adopts the cropped image's exact dimensions and aspect ratio. Existing text and picture positions are scaled proportionally so the layout stays aligned.
 
 Use **Add picture** to place logos, signatures, portraits, seals, or other artwork above the background. You can add multiple pictures, then crop, move, resize, adjust opacity, replace, or delete each layer independently. The crop editor supports freeform, square, 4:3, 16:9, and current-certificate aspect ratios. Picture layers are included in PNG, PDF, and ZIP exports and never leave the browser.
+
+## Recipient photos
+
+A photo layer shows a **different image for every row of your CSV** — headshots, signatures, team logos. Add one with **+ Photo**, point it at the CSV column holding the filenames, and link the folder those files live in.
+
+### Why a folder, not a path
+
+A browser cannot open a path. If your CSV says `C:\photos\ada.jpg`, no web page is allowed to read that file — it is a hard security boundary, not a missing feature. So the column is treated as a **lookup key** rather than a path: you hand the app a folder with **Link photo folder**, and it matches your CSV values against the files you picked. Nothing is uploaded and nothing leaves the device, exactly as with backgrounds and fonts.
+
+Matching is forgiving. It tries the exact value first, then the filename on its own, then the filename without its extension, and finally a loose comparison that ignores case, accents, spaces, hyphens and underscores. All of these find the same file:
+
+| CSV value | Matches |
+| --- | --- |
+| `ada.jpg` | `ada.jpg` |
+| `C:\Users\avi\photos\ada.jpg` | `ada.jpg` |
+| `ADA.JPG` | `ada.jpg` |
+| `ada` | `ada.jpg` |
+| `jose nunez` | `josé-núñez.png` |
+
+If a CSV column contains values that all end in `.png`, `.jpg` or `.webp`, the app notices after an upload and suggests adding a photo layer.
+
+### Fit, shape and gaps
+
+Recipient photos arrive in every aspect ratio, so each layer has a **fit** rather than a fixed crop: **Cover** fills the box and crops the overflow (the right default for portraits), **Contain** fits the whole image inside, and **Fill** stretches it. Layers can be rectangular or circular, and they move, resize, rotate and take opacity like any other layer.
+
+When a row has no matching file the layer is left empty, or draws a dashed placeholder box if you prefer — your choice per layer. The **Match report** lists exactly which rows are unmatched, and a batch export that would leave gaps stops and shows you that report first, so you find out before you send five hundred certificates rather than after.
+
+### What is and is not saved
+
+Photo layers are saved into `.certproj.json` as a **binding** — the column name, geometry, fit and shape — never the photos themselves. Embedding hundreds of recipient images would push a project past the autosave limits, and the files are yours to keep. After opening a saved project, link the photo folder again and every layer resolves.
+
+Photos are decoded once and downscaled to the largest size the layer actually needs, and only a small number are held in memory at a time, so a large batch does not exhaust it.
+
+## Blank canvas
+
+**Blank template** clears every text, picture and photo layer and leaves a plain white canvas at the current dimensions, for designing something from scratch rather than editing the built-in sample. **Use sample template** brings the decorated 1200 × 848 template back, and **Reset** restores the whole sample certificate.
 
 ## Rotation
 
