@@ -25,6 +25,8 @@
  *                   blank: true | false },
  *   "photos":  [ { id, column, x, y, width, height, opacity, rotation,
  *                  fit, shape, missing } ],
+ *   "shapes":  [ { id, kind, sides, radius, x, y, width, height,
+ *                  filled, fill, stroke, strokeWidth, opacity, rotation } ],
  *   "fonts":   [ { family, displayName, fileName, data: "<base64 font file>" } ]
  * }
  *
@@ -40,7 +42,7 @@
   "use strict";
 
   const SCHEMA = "certificate-generator.project";
-  const VERSION = 1;
+  const VERSION = 2;   // v2 added shape layers; v1 files still open
   const FILE_SUFFIX = ".certproj.json";
   const LARGE_FILE_BYTES = 12 * 1024 * 1024;   // warn the user above this
   const AUTOSAVE_MAX_BYTES = 80 * 1024 * 1024; // refuse to autosave beyond this
@@ -163,6 +165,13 @@
         crop: normalizeCropRect(state.backgroundCrop),
         blank: Boolean(state.blankBackground)
       },
+      shapes: (state.shapes || []).map((item) => ({
+        id: item.id, kind: item.kind,
+        sides: item.sides, radius: item.radius,
+        x: item.x, y: item.y, width: item.width, height: item.height,
+        filled: Boolean(item.filled), fill: item.fill, stroke: item.stroke, strokeWidth: item.strokeWidth,
+        opacity: item.opacity, rotation: rotation(item.rotation)
+      })),
       photos: (state.photos || []).map((layer) => ({
         id: layer.id, column: layer.column,
         x: layer.x, y: layer.y, width: layer.width, height: layer.height,
@@ -186,7 +195,8 @@
     if (!Array.isArray(data.records) || data.records.length === 0) throw new Error("This project file has no recipient records.");
     if (data.images && !Array.isArray(data.images)) throw new Error("This project file has a damaged picture layer list.");
     if (data.fonts && !Array.isArray(data.fonts)) throw new Error("This project file has a damaged font list.");
-    if (data.photos && !Array.isArray(data.photos)) throw new Error("This project file has a damaged photo layer list.");
+    if (data.photos && !Array.isArray(data.photos)) throw new Error("This project file has a damaged dynamic picture list.");
+    if (data.shapes && !Array.isArray(data.shapes)) throw new Error("This project file has a damaged shape layer list.");
     if (!isObject(data.design) || !(num(data.design.width) > 0) || !(num(data.design.height) > 0)) {
       throw new Error("This project file has invalid canvas dimensions.");
     }
@@ -213,6 +223,28 @@
       fit: ["cover", "contain", "fill"].includes(layer.fit) ? layer.fit : "cover",
       shape: layer.shape === "circle" ? "circle" : "rect",
       missing: layer.missing === "placeholder" ? "placeholder" : "skip"
+    };
+  }
+
+  const SHAPE_KINDS = ["rectangle", "rounded", "ellipse", "triangle", "diamond", "polygon", "star", "line"];
+  const hex = (value, fallback) => (/^#[0-9a-f]{6}$/i.test(String(value)) ? String(value) : fallback);
+
+  function sanitizeShape(item, index) {
+    const kind = SHAPE_KINDS.includes(item.kind) ? item.kind : "rectangle";
+    return {
+      id: String(item.id || `shape-${Date.now()}-${index}`),
+      kind,
+      sides: Math.min(16, Math.max(3, Math.round(num(item.sides, 5)))),
+      radius: Math.max(0, num(item.radius, 0)),
+      x: num(item.x), y: num(item.y),
+      width: Math.max(1, num(item.width, 100)),
+      height: Math.max(1, num(item.height, 100)),
+      filled: kind === "line" ? false : item.filled !== false,
+      fill: hex(item.fill, "#e7c88a"),
+      stroke: hex(item.stroke, "#17223b"),
+      strokeWidth: Math.min(80, Math.max(0, num(item.strokeWidth, 0))),
+      opacity: Math.min(1, Math.max(0, num(item.opacity, 1))),
+      rotation: rotation(item.rotation)
     };
   }
 
@@ -321,6 +353,7 @@
     state.fields = [];
     state.images = [];
     state.photos = [];
+    state.shapes = [];
     setDesignSize(num(data.design.width, 1200), num(data.design.height, 848));
 
     state.fields = data.fields.map(sanitizeField);
@@ -329,6 +362,7 @@
       .filter(isObject)
       .map(sanitizePhoto)
       .filter((layer) => layer.column);
+    state.shapes = (Array.isArray(data.shapes) ? data.shapes : []).filter(isObject).map(sanitizeShape);
     state.records = JSON.parse(JSON.stringify(data.records));
     state.currentRecord = Math.min(Math.max(0, num(data.currentRecord, 0)), state.records.length - 1);
     state.backgroundImage = backgroundImage;
@@ -340,7 +374,7 @@
     state.exportQuality = ["normal", "high", "xhigh"].includes(data.exportQuality) ? data.exportQuality : "xhigh";
     state.interaction = null;
     state.cropSession = null;
-    const allIds = [...state.fields, ...state.images, ...state.photos].map((item) => item.id);
+    const allIds = [...state.fields, ...state.images, ...state.photos, ...state.shapes].map((item) => item.id);
     state.selectedField = allIds.includes(data.selectedField) ? data.selectedField : (state.fields[0]?.id ?? null);
 
     if (els.exportQuality) els.exportQuality.value = state.exportQuality;
@@ -463,6 +497,7 @@
       state.images.map((item) => [item.id, item.name, item.x, item.y, item.width, item.height, item.opacity, rotation(item.rotation), item.crop, (item.sourceSrc || "").length]),
       state.backgroundName, (state.backgroundSourceSrc || "").length, state.backgroundCrop, Boolean(state.blankBackground),
       state.photos,
+      state.shapes,
       state.customFonts.map((font) => font.family)
     ]);
   }

@@ -77,17 +77,17 @@
 
         <div class="photo-library">
           <div class="section-title-row">
-            <h2>Recipient photos</h2>
+            <h2>Dynamic pictures</h2>
           </div>
           <div class="photo-library-actions">
-            <button class="button button-quiet" id="photoFolderButton" type="button" title="Pick a folder of images; nothing is uploaded">Link photo folder</button>
+            <button class="button button-quiet" id="photoFolderButton" type="button" title="Pick a folder of recipient images; nothing is uploaded">Link image folder</button>
             <input id="photoFolderInput" type="file" multiple webkitdirectory directory hidden />
             <label class="text-button upload-button" for="photoFilesInput">
               <span id="photoFilesLabel">or pick files</span>
               <input id="photoFilesInput" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden />
             </label>
           </div>
-          <p class="photo-library-status" id="photoLibraryStatus">No photo folder linked</p>
+          <p class="photo-library-status" id="photoLibraryStatus">No image folder linked</p>
           <div class="photo-library-links">
             <button class="text-button" id="photoRefreshButton" type="button" hidden>Refresh</button>
             <button class="text-button" id="photoReportButton" type="button" hidden>Match report</button>
@@ -161,20 +161,25 @@
             </label>
             <button class="button button-quiet" id="clearBackgroundButton" type="button">Use sample template</button>
             <button class="button button-quiet" id="blankTemplateButton" type="button" title="Clear every layer and start on a white canvas">Blank template</button>
-            <span class="zoom-label" id="zoomLabel">100%</span>
+            <div class="zoom-control" role="group" aria-label="Canvas zoom">
+              <button class="zoom-step" id="zoomOutButton" type="button" aria-label="Zoom out" title="Zoom out · Ctrl -">−</button>
+              <button class="zoom-label" id="zoomLabel" type="button" title="Jump to 100%">100%</button>
+              <button class="zoom-step" id="zoomInButton" type="button" aria-label="Zoom in" title="Zoom in · Ctrl +">+</button>
+              <button class="zoom-fit" id="zoomFitButton" type="button" title="Fit the whole canvas · Ctrl 0">Fit</button>
+            </div>
           </div>
         </div>
 
         <div class="canvas-shell" id="canvasShell">
           <div class="stage-viewport" id="stageViewport">
-            <div class="certificate-stage" id="certificateStage" tabindex="0" aria-label="Certificate canvas. Select and drag text or picture layers to position them.">
+            <div class="certificate-stage" id="certificateStage" tabindex="0" aria-label="Certificate canvas. Select and drag layers to position them.">
               <canvas id="backgroundCanvas" width="1200" height="848"></canvas>
               <div id="fieldLayer"></div>
             </div>
           </div>
         </div>
 
-        <p class="canvas-help">Drag text or pictures to move them. Drag the corner handle to resize. Arrow keys nudge the selected layer.</p>
+        <p class="canvas-help">Drag a layer to move it, the corner handle to resize, arrow keys to nudge. Ctrl + scroll zooms, Ctrl C / Ctrl V copy and paste a layer.</p>
       </section>
 
       <aside class="panel properties-panel" aria-label="Layer settings">
@@ -184,14 +189,18 @@
           <div class="layer-actions">
             <button class="button button-quiet layer-add-button" id="addFieldButton" type="button">+ Text</button>
             <label class="button button-quiet layer-add-button" for="imageElementUpload">+ Picture</label>
-            <button class="button button-quiet layer-add-button" id="addPhotoButton" type="button">+ Photo</button>
+            <button class="button button-quiet layer-add-button" id="addShapeButton" type="button" title="Add a shape: rectangle, ellipse, triangle, polygon or star">+ Shape</button>
+            <button class="button button-quiet layer-add-button" id="addPhotoButton" type="button" title="Add a dynamic picture: a different image for every recipient">+ Dynamic</button>
           </div>
         </div>
         <div class="layers" id="fieldList"></div>
 
         <div class="section-title-row properties-heading">
           <h2 id="selectedLayerLabel">Selected text</h2>
-          <button class="danger-link" id="deleteFieldButton" type="button">Delete</button>
+          <div class="properties-actions">
+            <button class="text-button" id="duplicateFieldButton" type="button" title="Duplicate this layer · Ctrl D">Duplicate</button>
+            <button class="danger-link" id="deleteFieldButton" type="button">Delete</button>
+          </div>
         </div>
 
         <form id="fieldForm" class="field-form" autocomplete="off">
@@ -273,11 +282,65 @@
           <p class="image-layer-hint">Add as many pictures as needed. Each layer can be moved, resized, replaced, or removed independently.</p>
         </form>
 
+        <form id="shapeForm" class="field-form shape-form" autocomplete="off" hidden>
+          <div class="form-grid">
+            <label>
+              <span class="form-label">Shape</span>
+              <select id="shapeKind">
+                <option value="rectangle">Rectangle / square</option>
+                <option value="rounded">Rounded rectangle</option>
+                <option value="ellipse">Ellipse / circle</option>
+                <option value="triangle">Triangle</option>
+                <option value="diamond">Diamond</option>
+                <option value="polygon">Polygon</option>
+                <option value="star">Star</option>
+                <option value="line">Line</option>
+              </select>
+            </label>
+            <label id="shapeSidesField">
+              <span class="form-label">Sides / points</span>
+              <input id="shapeSides" type="number" min="3" max="16" step="1" />
+            </label>
+            <label id="shapeRadiusField">
+              <span class="form-label">Corner radius</span>
+              <div class="unit-input"><input id="shapeRadius" type="number" min="0" step="1" /><span>px</span></div>
+            </label>
+            <label id="shapeFillField">
+              <span class="form-label">Fill</span>
+              <div class="color-input"><input id="shapeFill" type="color" /><input id="shapeFillText" type="text" maxlength="7" /></div>
+            </label>
+            <label>
+              <span class="form-label">Border</span>
+              <div class="color-input"><input id="shapeStroke" type="color" /><input id="shapeStrokeText" type="text" maxlength="7" /></div>
+            </label>
+            <label>
+              <span class="form-label">Border width</span>
+              <div class="unit-input"><input id="shapeStrokeWidth" type="number" min="0" max="80" step="1" /><span>px</span></div>
+            </label>
+          </div>
+
+          <label class="shape-toggle"><input id="shapeFilled" type="checkbox" /><span>Fill this shape</span></label>
+
+          <div class="form-grid positions-grid">
+            <label><span class="form-label">X</span><input id="shapeX" type="number" min="0" /></label>
+            <label><span class="form-label">Y</span><input id="shapeY" type="number" min="0" /></label>
+            <label><span class="form-label">Width</span><input id="shapeWidth" type="number" min="4" /></label>
+            <label><span class="form-label">Height</span><input id="shapeHeight" type="number" min="4" /></label>
+            <label class="rotation-field"><span class="form-label">Rotation</span><div class="unit-input"><input id="shapeRotation" type="number" min="-180" max="180" step="1" /><span>°</span></div></label>
+          </div>
+
+          <label>
+            <span class="form-label">Opacity</span>
+            <div class="range-row"><input id="shapeOpacity" type="range" min="10" max="100" step="1" /><output id="shapeOpacityValue">100%</output></div>
+          </label>
+          <p class="image-layer-hint">Shapes sit under every picture and text layer, so they work as bands, badges, dividers and frames.</p>
+        </form>
+
         <form id="photoForm" class="field-form photo-form" autocomplete="off" hidden>
           <div class="form-grid">
             <label>
               <span class="form-label">CSV column</span>
-              <select id="photoColumn" aria-label="Column holding the photo filename"></select>
+              <select id="photoColumn" aria-label="Column holding the image filename"></select>
             </label>
             <label>
               <span class="form-label">Fit</span>
@@ -341,7 +404,7 @@
       <form method="dialog" class="crop-card">
         <div class="crop-heading">
           <div>
-            <p class="eyebrow">Recipient photos</p>
+            <p class="eyebrow">Dynamic pictures</p>
             <h2 id="photoReportTitle">Match report</h2>
           </div>
           <button class="crop-close" type="submit" value="close" aria-label="Close match report">×</button>

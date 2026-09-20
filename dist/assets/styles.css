@@ -279,15 +279,23 @@ textarea { resize: vertical; line-height: 1.4; }
 .workspace-toolbar { min-height: 74px; padding: 14px 20px; border-bottom: 1px solid #d5dae3; display: flex; align-items: center; justify-content: space-between; gap: 14px; }
 .workspace-toolbar h2 { margin-top: 3px; font-size: 1.05rem; }
 .workspace-toolbar .button { font-size: .78rem; }
-.zoom-label { min-width: 45px; color: var(--muted); font-size: .75rem; text-align: right; }
+.zoom-control { display: inline-flex; align-items: center; gap: 2px; padding: 2px; border: 1px solid #cfd5df; border-radius: 8px; background: #fff; }
+.zoom-control button { border: 0; background: none; color: var(--ink); font: inherit; font-size: .75rem; line-height: 1; padding: 6px 7px; border-radius: 6px; cursor: pointer; }
+.zoom-control button:hover:not(:disabled) { background: #eef2f8; }
+.zoom-control button:disabled { color: #b4bcc9; cursor: default; }
+.zoom-step { min-width: 24px; font-weight: 700; }
+.zoom-label { min-width: 52px; color: var(--muted); text-align: center; font-variant-numeric: tabular-nums; }
+.zoom-fit { border-left: 1px solid #e3e8ef !important; border-radius: 0 6px 6px 0 !important; color: var(--muted); }
+.zoom-control .zoom-fit.active { color: #2d68c4; font-weight: 700; }
 
 .canvas-shell {
   flex: 1;
   min-height: 420px;
   padding: 34px;
   display: grid;
-  place-items: center;
-  overflow: hidden;
+  place-items: safe center;   /* "safe" keeps the top-left reachable when zoomed past the shell */
+  overflow: auto;
+  overscroll-behavior: contain;
   background-color: #dfe4eb;
   background-image: radial-gradient(#c7ced8 1px, transparent 1px);
   background-size: 18px 18px;
@@ -306,6 +314,7 @@ textarea { resize: vertical; line-height: 1.4; }
   touch-action: none;
 }
 
+.canvas-shell.panning { cursor: grabbing; }
 .stage-viewport { position: relative; flex: none; }
 .stage-viewport .certificate-stage { position: absolute; inset: 0 auto auto 0; }
 
@@ -338,7 +347,8 @@ textarea { resize: vertical; line-height: 1.4; }
 .canvas-field.selected .rotate-handle { display: block; }
 .canvas-help { min-height: 40px; text-align: center; padding: 10px 20px; color: var(--muted); font-size: .76rem; border-top: 1px solid #d5dae3; }
 
-.layer-actions { margin-left: auto; display: flex; gap: 5px; }
+.layer-actions { margin-left: auto; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px; }
+.properties-actions { display: flex; align-items: center; gap: 12px; }
 .layer-add-button { min-height: 34px; padding: 6px 8px; font-size: .7rem; cursor: pointer; }
 .layers { display: flex; flex-direction: column; gap: 5px; padding-bottom: 14px; border-bottom: 1px solid var(--line); max-height: 200px; overflow: auto; }
 .layer-button { width: 100%; border: 1px solid transparent; background: transparent; color: var(--ink); min-height: 42px; border-radius: 7px; display: grid; grid-template-columns: 30px minmax(0,1fr); align-items: center; text-align: left; padding: 6px; gap: 7px; }
@@ -446,6 +456,11 @@ textarea { resize: vertical; line-height: 1.4; }
 .photo-match-note { margin: 9px 0 0; color: var(--muted); font-size: .7rem; word-break: break-word; }
 
 .canvas-field.photo-field img { object-position: center; }
+.canvas-field.shape-field { padding: 0; min-height: 0; }
+.canvas-field.shape-field.selected { padding: 0; background: none; }
+.canvas-field.shape-field svg { width: 100%; height: 100%; display: block; overflow: visible; pointer-events: none; }
+.shape-toggle { display: flex; align-items: center; gap: 8px; font-size: .74rem; color: var(--muted); }
+.shape-toggle input { width: 15px; height: 15px; }
 .canvas-field.photo-missing { border: 1px dashed #b9c3d4; background: rgba(238, 241, 246, .75); }
 .photo-missing-note { width: 100%; color: var(--muted); font-size: .7rem; text-align: center; pointer-events: none; }
 

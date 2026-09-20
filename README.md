@@ -40,10 +40,13 @@ GitHub strips `<iframe>` from READMEs, so the image above links to the video. Th
 - TXT files with one recipient name per line
 - PNG, JPEG, or WebP backgrounds that set the certificate's native dimensions
 - Multiple independently movable, resizable, replaceable, and croppable picture layers
-- Per-recipient photo layers matched by filename from one or more local folders, refreshable in place
+- Dynamic pictures: a per-recipient image matched by filename from one or more local folders, refreshable in place
+- Shape layers — rectangle, rounded rectangle, ellipse, triangle, diamond, polygon, star and line — with fill, border and rotation
+- Copy, paste and duplicate any layer with Ctrl C / Ctrl V / Ctrl D
+- Zoom from fit to 5× and beyond, with Ctrl + scroll, keyboard shortcuts and drag panning
 - Fixed text and variable placeholder fields
 - Local custom font uploads (`.ttf`, `.otf`, `.woff`, and `.woff2`)
-- Drag, resize, rotate, nudge, style, align, add, and delete text and picture layers
+- Drag, resize, rotate, nudge, style, align, add, duplicate, and delete every layer
 - Live preview for every record
 - Selectable Normal, High, and XHigh PNG and landscape A4 PDF export quality
 - Batch ZIP with high-resolution PNG and PDF folders
@@ -74,11 +77,11 @@ Custom fonts are restored automatically when you load a saved project or accept 
 
 ## Saving and loading projects
 
-Use **Save project** in the top toolbar to download the whole design as a single self-contained `*.certproj.json` file: all text layers, picture layers, photo layer bindings, their rotation angles, the background image and its crop, canvas dimensions, recipient records, export quality, and every uploaded font file. Recipient photos are the one exception — see [Recipient photos](#recipient-photos). Images and fonts are embedded as base64, so the file needs no companion assets and can be emailed, archived, or shared.
+Use **Save project** in the top toolbar to download the whole design as a single self-contained `*.certproj.json` file: all text layers, picture layers, shape layers, dynamic picture bindings, their rotation angles, the background image and its crop, canvas dimensions, recipient records, export quality, and every uploaded font file. Recipient images are the one exception — see [Dynamic pictures](#dynamic-pictures). Images and fonts are embedded as base64, so the file needs no companion assets and can be emailed, archived, or shared.
 
 Use **Load project** to reopen such a file. Images are rebuilt and custom fonts are re-registered, so the live preview and every export match what was saved. Files that are not valid projects, or that were written by a newer schema version, are rejected with an explanatory message and leave the current design untouched.
 
-Project files carry a `schema` identifier and an integer `version`. The current version is **1**.
+Project files carry a `schema` identifier and an integer `version`. The current version is **2**, which added shape layers; version 1 files still open, simply without any shapes.
 
 Because backgrounds are embedded at full resolution, project files can reach several megabytes; the app warns you when a save exceeds roughly 12 MB but never truncates anything.
 
@@ -92,13 +95,33 @@ Uploading a background changes the certificate canvas to the image's exact pixel
 
 Use **Add picture** to place logos, signatures, portraits, seals, or other artwork above the background. You can add multiple pictures, then crop, move, resize, adjust opacity, replace, or delete each layer independently. The crop editor supports freeform, square, 4:3, 16:9, and current-certificate aspect ratios. Picture layers are included in PNG, PDF, and ZIP exports and never leave the browser.
 
-## Recipient photos
+## Shapes
 
-A photo layer shows a **different image for every row of your CSV** — headshots, signatures, team logos. Add one with **+ Photo**, point it at the CSV column holding the filenames, and link the folder those files live in.
+**+ Shape** adds a vector layer that is drawn straight into the certificate: **rectangle** (a square is just an equal width and height), **rounded rectangle**, **ellipse**, **triangle**, **diamond**, **polygon** with 3–16 sides, **star** with 3–16 points, and **line**. Each shape carries a fill colour, a border colour and width, opacity and rotation, and is moved, resized and rotated exactly like every other layer.
+
+Shapes are stored as geometry, not pixels, and the same SVG path drives both the on-screen preview and the export, so a band or badge stays crisp at any export scale. They render below every picture and text layer, which is what you want for colour bands, badges, dividers and frames.
+
+## Copy, paste and duplicate
+
+Any layer — text, picture, dynamic picture or shape — can be copied with **Ctrl C** and pasted with **Ctrl V**, or duplicated in one step with **Ctrl D** or the **Duplicate** button next to Delete. The copy lands 18 px down and to the right of the original and becomes the selected layer, so pressing Ctrl V repeatedly walks a row of identical badges across the canvas. Copied picture layers share the already-decoded bitmap, so duplicating a large photo costs no extra memory and no re-decode. The clipboard is internal to the page: it holds one layer at a time and does not touch the system clipboard, so Ctrl C still copies text normally while you are typing in a field.
+
+## Zoom and panning
+
+The zoom control sits in the canvas toolbar: **−**, the current percentage (click it to jump to 100%), **+**, and **Fit**.
+
+- **Ctrl + scroll** zooms around the pointer, so the detail under the cursor stays put.
+- **Ctrl +**, **Ctrl −** and **Ctrl 0** step in, step out, and return to Fit.
+- Scroll, trackpad-swipe, or drag with the middle mouse button to pan once the canvas is larger than the viewport.
+
+The ceiling is at least **5×**, and rises to whatever it takes to fill the viewport with a **100 × 100 design-pixel** region — up to 16× — so you can align a seal or a hairline rule pixel by pixel. Zooming never changes the design: it only changes how the canvas is displayed, and exports always render at the chosen quality preset.
+
+## Dynamic pictures
+
+A dynamic picture shows a **different image for every row of your CSV** — headshots, signatures, team logos. Add one with **+ Dynamic**, point it at the CSV column holding the filenames, and link the folder those files live in.
 
 ### Why a folder, not a path
 
-A browser cannot open a path. If your CSV says `C:\photos\ada.jpg`, no web page is allowed to read that file — it is a hard security boundary, not a missing feature. So the column is treated as a **lookup key** rather than a path: you hand the app a folder with **Link photo folder**, and it matches your CSV values against the files you picked. Nothing is uploaded and nothing leaves the device, exactly as with backgrounds and fonts.
+A browser cannot open a path. If your CSV says `C:\photos\ada.jpg`, no web page is allowed to read that file — it is a hard security boundary, not a missing feature. So the column is treated as a **lookup key** rather than a path: you hand the app a folder with **Link image folder**, and it matches your CSV values against the files you picked. Nothing is uploaded and nothing leaves the device, exactly as with backgrounds and fonts.
 
 Matching is forgiving. It tries the exact value first, then the filename on its own, then the filename without its extension, and finally a loose comparison that ignores case, accents, spaces, hyphens and underscores. All of these find the same file:
 
@@ -110,7 +133,7 @@ Matching is forgiving. It tries the exact value first, then the filename on its 
 | `ada` | `ada.jpg` |
 | `jose nunez` | `josé-núñez.png` |
 
-If a CSV column contains values that all end in `.png`, `.jpg` or `.webp`, the app notices after an upload and suggests adding a photo layer.
+If a CSV column contains values that all end in `.png`, `.jpg` or `.webp`, the app notices after an upload and suggests adding a dynamic picture.
 
 ### Several folders, and a refresh
 
@@ -122,23 +145,23 @@ Re-picking a folder replaces that source's file list wholesale, so deletions and
 
 ### Fit, shape and gaps
 
-Recipient photos arrive in every aspect ratio, so each layer has a **fit** rather than a fixed crop: **Cover** fills the box and crops the overflow (the right default for portraits), **Contain** fits the whole image inside, and **Fill** stretches it. Layers can be rectangular or circular, and they move, resize, rotate and take opacity like any other layer.
+Recipient images arrive in every aspect ratio, so each layer has a **fit** rather than a fixed crop: **Cover** fills the box and crops the overflow (the right default for portraits), **Contain** fits the whole image inside, and **Fill** stretches it. Layers can be rectangular or circular, and they move, resize, rotate and take opacity like any other layer.
 
 When a row has no matching file the layer is left empty, or draws a dashed placeholder box if you prefer — your choice per layer. The **Match report** lists exactly which rows are unmatched, and a batch export that would leave gaps stops and shows you that report first, so you find out before you send five hundred certificates rather than after.
 
 ### What is and is not saved
 
-Photo layers are saved into `.certproj.json` as a **binding** — the column name, geometry, fit and shape — never the photos themselves. Embedding hundreds of recipient images would push a project past the autosave limits, and the files are yours to keep. After opening a saved project, link the photo folders again and every layer resolves.
+Dynamic pictures are saved into `.certproj.json` as a **binding** — the column name, geometry, fit and shape — never the images themselves. Embedding hundreds of recipient images would push a project past the autosave limits, and the files are yours to keep. After opening a saved project, link the image folders again and every layer resolves.
 
-Photos are decoded once and downscaled to the largest size the layer actually needs, and only a small number are held in memory at a time, so a large batch does not exhaust it.
+Images are decoded once and downscaled to the largest size the layer actually needs, and only a small number are held in memory at a time, so a large batch does not exhaust it.
 
 ## Blank canvas
 
-**Blank template** clears every text, picture and photo layer and leaves a plain white canvas at the current dimensions, for designing something from scratch rather than editing the built-in sample. **Use sample template** brings the decorated 1200 × 848 template back, and **Reset** restores the whole sample certificate.
+**Blank template** clears every text, picture, dynamic picture and shape layer and leaves a plain white canvas at the current dimensions, for designing something from scratch rather than editing the built-in sample. **Use sample template** brings the decorated 1200 × 848 template back, and **Reset** restores the whole sample certificate.
 
 ## Rotation
 
-Every text and picture layer carries its own rotation angle. Select a layer and either drag the round handle that appears above it or type an angle into the **Rotation** field in the sidebar. Hold **Shift** while dragging to snap to 15° steps. Angles are stored in degrees and folded into the range −180° to 180°, so 200° and −160° are the same value.
+Every layer carries its own rotation angle. Select a layer and either drag the round handle that appears above it or type an angle into the **Rotation** field in the sidebar. Hold **Shift** while dragging to snap to 15° steps. Angles are stored in degrees and folded into the range −180° to 180°, so 200° and −160° are the same value.
 
 A layer turns around the centre of its own box: for a picture that is the centre of the image, and for a text layer it is the horizontal centre of the field and the vertical middle of the wrapped text block. The preview and the exported PNG, PDF, and ZIP use exactly the same pivot, so what you see on screen is what is rendered.
 

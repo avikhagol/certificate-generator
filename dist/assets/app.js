@@ -31,7 +31,10 @@
     fields: structuredClone(sampleFields),
     images: [],
     photos: [],
+    shapes: [],
     photoLibrary: null,
+    clipboard: null,
+    zoom: "fit",
     blankBackground: false,
     currentRecord: 0,
     selectedField: "name",
@@ -52,7 +55,12 @@
     stage: $("certificateStage"), stageViewport: $("stageViewport"), shell: $("canvasShell"), background: $("backgroundCanvas"), fieldLayer: $("fieldLayer"),
     dataUpload: $("dataUpload"), photoFolder: $("photoFolderInput"), photoFolderButton: $("photoFolderButton"), photoFiles: $("photoFilesInput"), photoFilesLabel: $("photoFilesLabel"),
     photoStatus: $("photoLibraryStatus"), photoReport: $("photoReportButton"), photoRefresh: $("photoRefreshButton"), photoUnlink: $("photoUnlinkButton"),
-    blankTemplate: $("blankTemplateButton"), addPhoto: $("addPhotoButton"),
+    blankTemplate: $("blankTemplateButton"), addPhoto: $("addPhotoButton"), addShape: $("addShapeButton"), duplicateField: $("duplicateFieldButton"),
+    shapeForm: $("shapeForm"), shapeKind: $("shapeKind"), shapeSides: $("shapeSides"), shapeSidesField: $("shapeSidesField"), shapeRadius: $("shapeRadius"), shapeRadiusField: $("shapeRadiusField"),
+    shapeFill: $("shapeFill"), shapeFillText: $("shapeFillText"), shapeFillField: $("shapeFillField"), shapeFilled: $("shapeFilled"),
+    shapeStroke: $("shapeStroke"), shapeStrokeText: $("shapeStrokeText"), shapeStrokeWidth: $("shapeStrokeWidth"),
+    shapeX: $("shapeX"), shapeY: $("shapeY"), shapeWidth: $("shapeWidth"), shapeHeight: $("shapeHeight"), shapeRotation: $("shapeRotation"),
+    shapeOpacity: $("shapeOpacity"), shapeOpacityValue: $("shapeOpacityValue"),
     photoForm: $("photoForm"), photoColumn: $("photoColumn"), photoFit: $("photoFit"), photoShape: $("photoShape"), photoMissing: $("photoMissing"),
     photoX: $("photoX"), photoY: $("photoY"), photoWidth: $("photoWidth"), photoHeight: $("photoHeight"), photoRotation: $("photoRotation"),
     photoOpacity: $("photoOpacity"), photoOpacityValue: $("photoOpacityValue"), photoMatchNote: $("photoMatchNote"),
@@ -64,7 +72,7 @@
     fieldForm: $("fieldForm"), fieldText: $("fieldText"), fieldFont: $("fieldFont"), fontStatus: $("fontStatus"), fieldSize: $("fieldSize"), fieldWeight: $("fieldWeight"), fieldColor: $("fieldColor"), fieldColorText: $("fieldColorText"),
     fieldX: $("fieldX"), fieldY: $("fieldY"), fieldWidth: $("fieldWidth"), fieldRotation: $("fieldRotation"), alignment: $("alignmentControl"),
     imageForm: $("imageForm"), imageLayerPreview: $("imageLayerPreview"), imageX: $("imageX"), imageY: $("imageY"), imageWidth: $("imageWidth"), imageRotation: $("imageRotation"), imageOpacity: $("imageOpacity"), imageOpacityValue: $("imageOpacityValue"),
-    zoomLabel: $("zoomLabel"), exportQuality: $("exportQuality"), exportSummary: $("exportSummary"), reset: $("resetButton"), downloadPng: $("downloadPngButton"), downloadPdf: $("downloadPdfButton"), batch: $("batchButton"),
+    zoomLabel: $("zoomLabel"), zoomIn: $("zoomInButton"), zoomOut: $("zoomOutButton"), zoomFit: $("zoomFitButton"), exportQuality: $("exportQuality"), exportSummary: $("exportSummary"), reset: $("resetButton"), downloadPng: $("downloadPngButton"), downloadPdf: $("downloadPdfButton"), batch: $("batchButton"),
     toast: $("toast"), progress: $("progressOverlay"), progressTitle: $("progressTitle"), progressText: $("progressText"), progressBar: $("progressBar"),
     cropDialog: $("cropDialog"), cropDialogTitle: $("cropDialogTitle"), cropCanvas: $("cropCanvas"), cropAspect: $("cropAspect"), cropX: $("cropX"), cropY: $("cropY"), cropWidth: $("cropWidth"), cropHeight: $("cropHeight"), cropReset: $("cropResetButton"), cropApply: $("cropApplyButton")
   };
@@ -393,6 +401,129 @@
     });
   }
 
+  /* ------------------------------------------------------------ shape layers */
+
+  const SVG_NS = "http://www.w3.org/2000/svg";
+  const SHAPE_KINDS = {
+    rectangle: "Rectangle", rounded: "Rounded rectangle", ellipse: "Ellipse",
+    triangle: "Triangle", diamond: "Diamond", polygon: "Polygon", star: "Star", line: "Line"
+  };
+
+  function shapeLayer(kind = "rectangle") {
+    const width = Math.round(Math.min(320, DESIGN.width * 0.26));
+    const height = kind === "line" ? 6 : Math.round(Math.min(width, DESIGN.height * 0.26));
+    return {
+      id: `shape-${Date.now()}`,
+      kind,
+      sides: 5,
+      radius: Math.round(Math.min(width, height) * 0.14),
+      x: Math.round((DESIGN.width - width) / 2),
+      y: Math.round((DESIGN.height - height) / 2),
+      width, height,
+      filled: kind !== "line",
+      fill: "#e7c88a",
+      stroke: "#17223b",
+      strokeWidth: kind === "line" ? 4 : 0,
+      opacity: 1,
+      rotation: 0
+    };
+  }
+
+  const shapeSides = (item) => clamp(Math.round(Number(item.sides) || 5), 3, 16);
+  const round3 = (value) => Math.round(value * 1000) / 1000;
+
+  /** Vertices of a regular n-gon inscribed in the layer box, first point up. */
+  function regularPoints(width, height, sides, offset = -90) {
+    const cx = width / 2, cy = height / 2;
+    return Array.from({ length: sides }, (_, index) => {
+      const angle = (offset + index * 360 / sides) * Math.PI / 180;
+      return [cx + Math.cos(angle) * cx, cy + Math.sin(angle) * cy];
+    });
+  }
+
+  function starPoints(width, height, points, innerRatio = 0.44) {
+    const cx = width / 2, cy = height / 2;
+    const total = points * 2;
+    return Array.from({ length: total }, (_, index) => {
+      const ratio = index % 2 ? innerRatio : 1;
+      const angle = (-90 + index * 360 / total) * Math.PI / 180;
+      return [cx + Math.cos(angle) * cx * ratio, cy + Math.sin(angle) * cy * ratio];
+    });
+  }
+
+  const polygonPath = (points) => `M ${points.map(([x, y]) => `${round3(x)} ${round3(y)}`).join(" L ")} Z`;
+
+  /**
+   * One SVG path per shape, in the layer's own 0,0 → width,height space. The
+   * DOM preview feeds it to <path d> and the export feeds the same string to
+   * Path2D, so what you arrange is exactly what is rendered.
+   */
+  function shapePathData(item) {
+    const w = Math.max(1, item.width);
+    const h = Math.max(1, item.height);
+    switch (item.kind) {
+      case "ellipse": {
+        const rx = round3(w / 2), ry = round3(h / 2);
+        return `M 0 ${ry} A ${rx} ${ry} 0 1 0 ${round3(w)} ${ry} A ${rx} ${ry} 0 1 0 0 ${ry} Z`;
+      }
+      case "rounded": {
+        const r = round3(clamp(Number(item.radius) || 0, 0, Math.min(w, h) / 2));
+        if (!r) return `M 0 0 H ${round3(w)} V ${round3(h)} H 0 Z`;
+        return `M ${r} 0 H ${round3(w - r)} A ${r} ${r} 0 0 1 ${round3(w)} ${r} V ${round3(h - r)} A ${r} ${r} 0 0 1 ${round3(w - r)} ${round3(h)} H ${r} A ${r} ${r} 0 0 1 0 ${round3(h - r)} V ${r} A ${r} ${r} 0 0 1 ${r} 0 Z`;
+      }
+      case "triangle": return polygonPath([[w / 2, 0], [w, h], [0, h]]);
+      case "diamond": return polygonPath([[w / 2, 0], [w, h / 2], [w / 2, h], [0, h / 2]]);
+      case "polygon": return polygonPath(regularPoints(w, h, shapeSides(item)));
+      case "star": return polygonPath(starPoints(w, h, shapeSides(item)));
+      case "line": return `M 0 ${round3(h / 2)} H ${round3(w)}`;
+      default: return `M 0 0 H ${round3(w)} V ${round3(h)} H 0 Z`;
+    }
+  }
+
+  const shapeIsFilled = (item) => Boolean(item.filled) && item.kind !== "line";
+
+  function shapeSvg(item) {
+    const svg = document.createElementNS(SVG_NS, "svg");
+    svg.setAttribute("viewBox", `0 0 ${Math.max(1, item.width)} ${Math.max(1, item.height)}`);
+    svg.setAttribute("preserveAspectRatio", "none");
+    const path = document.createElementNS(SVG_NS, "path");
+    path.setAttribute("d", shapePathData(item));
+    path.setAttribute("fill", shapeIsFilled(item) ? item.fill : "none");
+    if (item.strokeWidth > 0) {
+      path.setAttribute("stroke", item.stroke);
+      path.setAttribute("stroke-width", item.strokeWidth);
+      path.setAttribute("stroke-linejoin", "round");
+      path.setAttribute("stroke-linecap", "round");
+    }
+    svg.append(path);
+    return svg;
+  }
+
+  function drawShapeLayer(ctx, item) {
+    if (!shapeIsFilled(item) && !(item.strokeWidth > 0)) return;
+    ctx.save();
+    ctx.globalAlpha = item.opacity;
+    applyRotation(ctx, item, item.x + item.width / 2, item.y + item.height / 2);
+    ctx.translate(item.x, item.y);
+    const path = new Path2D(shapePathData(item));
+    if (shapeIsFilled(item)) { ctx.fillStyle = item.fill; ctx.fill(path); }
+    if (item.strokeWidth > 0) {
+      ctx.strokeStyle = item.stroke;
+      ctx.lineWidth = item.strokeWidth;
+      ctx.lineJoin = "round";
+      ctx.lineCap = "round";
+      ctx.stroke(path);
+    }
+    ctx.restore();
+  }
+
+  function addShapeLayer() {
+    const item = shapeLayer(els.shapeKind.value || "rectangle");
+    state.shapes.push(item);
+    selectField(item.id);
+    showToast(`${SHAPE_KINDS[item.kind]} added`);
+  }
+
   function drawDefaultTemplate(ctx) {
     const { width: w, height: h } = DESIGN;
     ctx.save();
@@ -477,7 +608,7 @@
     const ratioX = nextWidth / DESIGN.width;
     const ratioY = nextHeight / DESIGN.height;
     const sizeRatio = Math.min(ratioX, ratioY);
-    [...state.fields, ...state.images, ...state.photos].forEach((item) => {
+    [...state.fields, ...state.images, ...state.photos, ...state.shapes].forEach((item) => {
       item.x *= ratioX;
       item.y *= ratioY;
       item.width *= ratioX;
@@ -500,14 +631,20 @@
     els.photoY.max = nextHeight;
     els.photoWidth.max = nextWidth;
     els.photoHeight.max = nextHeight;
+    els.shapeX.max = nextWidth;
+    els.shapeY.max = nextHeight;
+    els.shapeWidth.max = nextWidth;
+    els.shapeHeight.max = nextHeight;
   }
 
   function getSelectedField() { return state.fields.find((item) => item.id === state.selectedField); }
   function getSelectedImage() { return state.images.find((item) => item.id === state.selectedField); }
   function getSelectedPhoto() { return state.photos.find((item) => item.id === state.selectedField); }
-  function getSelectedItem() { return getSelectedField() || getSelectedImage() || getSelectedPhoto(); }
+  function getSelectedShape() { return state.shapes.find((item) => item.id === state.selectedField); }
+  function getSelectedItem() { return getSelectedField() || getSelectedImage() || getSelectedPhoto() || getSelectedShape(); }
   function findItem(id) {
-    return state.fields.find((item) => item.id === id) || state.images.find((item) => item.id === id) || state.photos.find((item) => item.id === id);
+    return state.fields.find((item) => item.id === id) || state.images.find((item) => item.id === id)
+      || state.photos.find((item) => item.id === id) || state.shapes.find((item) => item.id === id);
   }
 
   function renderAll() {
@@ -560,6 +697,15 @@
   function renderFields() {
     const record = state.records[state.currentRecord] || {};
     const fragment = document.createDocumentFragment();
+    state.shapes.forEach((item) => {
+      const node = document.createElement("div");
+      node.className = `canvas-field shape-field${item.id === state.selectedField ? " selected" : ""}`;
+      node.dataset.id = item.id;
+      node.style.cssText = `left:${item.x}px;top:${item.y}px;width:${item.width}px;height:${item.height}px;opacity:${item.opacity};${rotationStyle(item, item.height / 2)}`;
+      node.append(shapeSvg(item), resizeHandle(), rotateHandle(item));
+      node.addEventListener("pointerdown", startFieldInteraction);
+      fragment.append(node);
+    });
     state.images.forEach((item) => {
       const node = document.createElement("div");
       node.className = `canvas-field image-field${item.id === state.selectedField ? " selected" : ""}`;
@@ -634,10 +780,11 @@
   function alignToFlex(align) { return align === "left" ? "flex-start" : align === "right" ? "flex-end" : "center"; }
 
   function renderFieldList() {
+    const shapeButtons = state.shapes.map((item, index) => createLayerButton(item, "shape", index));
     const imageButtons = state.images.map((item, index) => createLayerButton(item, "image", index));
     const photoButtons = state.photos.map((item, index) => createLayerButton(item, "photo", index));
     const textButtons = state.fields.map((item, index) => createLayerButton(item, "text", index));
-    els.fieldList.replaceChildren(...imageButtons, ...photoButtons, ...textButtons);
+    els.fieldList.replaceChildren(...shapeButtons, ...imageButtons, ...photoButtons, ...textButtons);
   }
 
   function createLayerButton(item, type, index) {
@@ -645,11 +792,11 @@
       button.type = "button";
       button.className = `layer-button${item.id === state.selectedField ? " selected" : ""}`;
       button.dataset.id = item.id;
-      const icon = document.createElement("span"); icon.className = "layer-icon"; icon.textContent = type === "image" ? "▧" : type === "photo" ? "◉" : "T";
+      const icon = document.createElement("span"); icon.className = "layer-icon"; icon.textContent = type === "image" ? "▧" : type === "photo" ? "◉" : type === "shape" ? "◇" : "T";
       const copy = document.createElement("span"); copy.className = "layer-copy";
       const title = document.createElement("strong");
-      title.textContent = type === "image" ? item.name : type === "photo" ? `{{${item.column}}}` : displayFieldName(item, index);
-      const base = type === "image" || type === "photo" ? `${Math.round(item.width)} × ${Math.round(item.height)} px` : item.text.replace(/\n/g, " ");
+      title.textContent = type === "image" ? item.name : type === "photo" ? `{{${item.column}}}` : type === "shape" ? SHAPE_KINDS[item.kind] || "Shape" : displayFieldName(item, index);
+      const base = type === "text" ? item.text.replace(/\n/g, " ") : `${Math.round(item.width)} × ${Math.round(item.height)} px`;
       const angle = normalizeRotation(item.rotation);
       const subtitle = document.createElement("span"); subtitle.textContent = angle ? `${base} · ${angle}°` : base;
       copy.append(title, subtitle); button.append(icon, copy);
@@ -668,11 +815,37 @@
     const textItem = getSelectedField();
     const imageItem = getSelectedImage();
     const photoItem = getSelectedPhoto();
+    const shapeItem = getSelectedShape();
     els.fieldForm.toggleAttribute("hidden", !textItem);
     els.imageForm.toggleAttribute("hidden", !imageItem);
     els.photoForm.toggleAttribute("hidden", !photoItem);
-    els.deleteField.disabled = !textItem && !imageItem && !photoItem;
-    els.selectedLayerLabel.textContent = imageItem ? "Selected picture" : photoItem ? "Selected photo" : textItem ? "Selected text" : "No layer selected";
+    els.shapeForm.toggleAttribute("hidden", !shapeItem);
+    els.deleteField.disabled = !textItem && !imageItem && !photoItem && !shapeItem;
+    els.duplicateField.disabled = els.deleteField.disabled;
+    els.selectedLayerLabel.textContent = imageItem ? "Selected picture" : photoItem ? "Selected dynamic picture"
+      : shapeItem ? "Selected shape" : textItem ? "Selected text" : "No layer selected";
+    if (shapeItem) {
+      els.shapeKind.value = shapeItem.kind;
+      els.shapeSides.value = shapeSides(shapeItem);
+      els.shapeRadius.value = Math.round(shapeItem.radius || 0);
+      els.shapeSidesField.toggleAttribute("hidden", !["polygon", "star"].includes(shapeItem.kind));
+      els.shapeRadiusField.toggleAttribute("hidden", shapeItem.kind !== "rounded");
+      els.shapeFillField.toggleAttribute("hidden", shapeItem.kind === "line");
+      els.shapeFilled.checked = shapeIsFilled(shapeItem);
+      els.shapeFilled.disabled = shapeItem.kind === "line";
+      els.shapeFill.value = shapeItem.fill;
+      els.shapeFillText.value = shapeItem.fill;
+      els.shapeStroke.value = shapeItem.stroke;
+      els.shapeStrokeText.value = shapeItem.stroke;
+      els.shapeStrokeWidth.value = Math.round(shapeItem.strokeWidth);
+      els.shapeX.value = Math.round(shapeItem.x);
+      els.shapeY.value = Math.round(shapeItem.y);
+      els.shapeWidth.value = Math.round(shapeItem.width);
+      els.shapeHeight.value = Math.round(shapeItem.height);
+      els.shapeRotation.value = normalizeRotation(shapeItem.rotation);
+      els.shapeOpacity.value = Math.round(shapeItem.opacity * 100);
+      els.shapeOpacityValue.textContent = `${Math.round(shapeItem.opacity * 100)}%`;
+    }
     if (photoItem) {
       syncPhotoColumns(photoItem);
       els.photoFit.value = photoItem.fit;
@@ -735,14 +908,96 @@
     els.fieldText.setSelectionRange(start + token.length, start + token.length);
   }
 
-  function fitStage() {
+  const ZOOM_STEPS = [0.25, 0.33, 0.5, 0.67, 0.75, 1, 1.25, 1.5, 2, 3, 4, 5, 6, 8, 12, 16];
+
+  /** The scale at which the whole canvas is visible. */
+  function fitScale() {
     const availableWidth = Math.max(260, els.shell.clientWidth - 68);
     const availableHeight = Math.max(220, els.shell.clientHeight - 68);
-    state.scale = Math.min(1, availableWidth / DESIGN.width, availableHeight / DESIGN.height);
+    return Math.min(1, availableWidth / DESIGN.width, availableHeight / DESIGN.height);
+  }
+
+  /**
+   * Zoom ceiling: at least 5×, and as far as filling the viewport with a
+   * 100 × 100 design-pixel region — whichever the shell can actually show.
+   */
+  function maxZoom() {
+    const shortest = Math.max(200, Math.min(els.shell.clientWidth, els.shell.clientHeight) - 24);
+    return clamp(shortest / 100, 5, ZOOM_STEPS[ZOOM_STEPS.length - 1]);
+  }
+
+  const minZoom = () => Math.min(0.25, fitScale());
+
+  function fitStage() {
+    const fit = fitScale();
+    state.scale = state.zoom === "fit" ? fit : clamp(state.zoom, minZoom(), maxZoom());
     els.stage.style.transform = `scale(${state.scale})`;
     els.stageViewport.style.width = `${DESIGN.width * state.scale}px`;
     els.stageViewport.style.height = `${DESIGN.height * state.scale}px`;
     els.zoomLabel.textContent = `${Math.round(state.scale * 100)}%`;
+    els.zoomFit.classList.toggle("active", state.zoom === "fit");
+    els.zoomIn.disabled = state.scale >= maxZoom() - 0.0001;
+    els.zoomOut.disabled = state.scale <= minZoom() + 0.0001;
+  }
+
+  /**
+   * Apply a zoom, keeping the design point under `anchor` (a client point,
+   * the pointer or the middle of the shell) exactly where it is on screen.
+   */
+  function setZoom(next, anchor) {
+    const before = state.scale;
+    const shellRect = els.shell.getBoundingClientRect();
+    const point = anchor || { clientX: shellRect.left + els.shell.clientWidth / 2, clientY: shellRect.top + els.shell.clientHeight / 2 };
+    const viewRect = els.stageViewport.getBoundingClientRect();
+    const designX = (point.clientX - viewRect.left) / before;
+    const designY = (point.clientY - viewRect.top) / before;
+    state.zoom = next === "fit" ? "fit" : clamp(Number(next) || 1, minZoom(), maxZoom());
+    fitStage();
+    if (state.zoom === "fit") { els.shell.scrollTo(0, 0); return; }
+    const after = els.stageViewport.getBoundingClientRect();
+    els.shell.scrollLeft += (after.left + designX * state.scale) - point.clientX;
+    els.shell.scrollTop += (after.top + designY * state.scale) - point.clientY;
+  }
+
+  /** Step through the preset ladder, with the current fit scale as a stop. */
+  function zoomStep(direction, anchor) {
+    const stops = [...new Set([minZoom(), fitScale(), ...ZOOM_STEPS, maxZoom()])]
+      .filter((value) => value >= minZoom() - 0.0001 && value <= maxZoom() + 0.0001)
+      .sort((a, b) => a - b);
+    const current = state.scale;
+    const next = direction > 0
+      ? stops.find((value) => value > current + 0.0001)
+      : [...stops].reverse().find((value) => value < current - 0.0001);
+    if (next === undefined) return;
+    setZoom(next, anchor);
+  }
+
+  function handleStageWheel(event) {
+    if (!event.ctrlKey && !event.metaKey) return;   // plain scrolling still pans
+    event.preventDefault();
+    const factor = Math.exp(-event.deltaY * 0.0022);
+    setZoom(state.scale * factor, event);
+  }
+
+  /** Middle-button drag pans, the way every canvas editor does it. */
+  function startPan(event) {
+    if (event.button !== 1) return;
+    event.preventDefault();
+    const start = { x: event.clientX, y: event.clientY, left: els.shell.scrollLeft, top: els.shell.scrollTop };
+    els.shell.classList.add("panning");
+    const move = (moveEvent) => {
+      els.shell.scrollLeft = start.left - (moveEvent.clientX - start.x);
+      els.shell.scrollTop = start.top - (moveEvent.clientY - start.y);
+    };
+    const stop = () => {
+      els.shell.classList.remove("panning");
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", stop);
+      window.removeEventListener("pointercancel", stop);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", stop);
+    window.addEventListener("pointercancel", stop);
   }
 
   function startFieldInteraction(event) {
@@ -754,11 +1009,12 @@
     }
     const item = getSelectedItem();
     const isPhoto = Boolean(getSelectedPhoto());
-    const isImage = Boolean(getSelectedImage()) || isPhoto;
+    const isShape = Boolean(getSelectedShape());
+    const isImage = Boolean(getSelectedImage()) || isPhoto || isShape;
     const resizing = event.target.classList.contains("resize-handle");
     const rotating = event.target.classList.contains("rotate-handle");
     state.interaction = {
-      id, isImage, isPhoto, resizing, rotating, pointerId: event.pointerId, startX: event.clientX, startY: event.clientY,
+      id, isImage, isPhoto, isShape, resizing, rotating, pointerId: event.pointerId, startX: event.clientX, startY: event.clientY,
       x: item.x, y: item.y, width: item.width, height: item.height, size: item.size,
       rotation: normalizeRotation(item.rotation)
     };
@@ -796,11 +1052,13 @@
       const sin = Math.sin(radians);
       const localDx = dx * cos + dy * sin;
       const localDy = -dx * sin + dy * cos;
-      if (action.isPhoto) {
-        // A photo box is free-form: the fit mode, not the box, follows the
-        // bitmap's aspect ratio, which differs for every recipient anyway.
-        item.width = clamp(action.width + localDx, 40, DESIGN.width);
-        item.height = clamp(action.height + localDy, 40, DESIGN.height);
+      if (action.isPhoto || action.isShape) {
+        // Free-form boxes. For a dynamic picture the fit mode, not the box,
+        // follows the bitmap's aspect ratio, which differs per recipient; a
+        // shape is pure geometry and stretches however it is dragged.
+        const minSize = action.isShape ? 4 : 40;
+        item.width = clamp(action.width + localDx, minSize, DESIGN.width);
+        item.height = clamp(action.height + localDy, minSize, DESIGN.height);
       } else if (action.isImage) {
         const aspect = action.width / action.height;
         const maxWidth = Math.min(DESIGN.width - item.x, (DESIGN.height - item.y) * aspect);
@@ -823,6 +1081,23 @@
   }
 
   function clamp(value, min, max) { return Math.max(min, Math.min(max, value)); }
+
+  const isTypingTarget = (node) => Boolean(node) && (["INPUT", "TEXTAREA", "SELECT"].includes(node.tagName) || node.isContentEditable);
+
+  /** Document-level shortcuts: copy / paste / duplicate a layer, and zoom. */
+  function handleShortcut(event) {
+    if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+    if (els.cropDialog.open || els.reportDialog.open) return;
+    const typing = isTypingTarget(document.activeElement);
+    const key = event.key.toLowerCase();
+    if (key === "0") { setZoom("fit"); event.preventDefault(); return; }
+    if (key === "=" || key === "+") { zoomStep(1); event.preventDefault(); return; }
+    if (key === "-" || key === "_") { zoomStep(-1); event.preventDefault(); return; }
+    if (typing || event.shiftKey) return;   // let the browser copy text from an input
+    if (key === "c") { copySelectedLayer(); event.preventDefault(); }
+    else if (key === "v") { pasteLayer(); event.preventDefault(); }
+    else if (key === "d") { duplicateSelectedLayer(); event.preventDefault(); }
+  }
 
   function handleStageKeydown(event) {
     const item = getSelectedItem();
@@ -875,7 +1150,7 @@
       showToast(`${records.length} records loaded from ${file.name}`);
       const detected = detectPhotoColumns();
       if (detected.length && !state.photos.length) {
-        setTimeout(() => showToast(`"${detected[0]}" looks like image files — add a photo layer with + Photo`), 2800);
+        setTimeout(() => showToast(`"${detected[0]}" looks like image files — add a dynamic picture with + Dynamic`), 2800);
       }
     } catch (error) { showToast(error.message, true); }
     event.target.value = "";
@@ -1208,7 +1483,7 @@
   }
 
   function updatePhotoMatchNote(layer) {
-    if (!state.photoLibrary) { els.photoMatchNote.textContent = "Link a photo folder to resolve this column."; return; }
+    if (!state.photoLibrary) { els.photoMatchNote.textContent = "Link an image folder to resolve this column."; return; }
     const record = state.records[state.currentRecord] || {};
     const value = String(record[layer.column] ?? "").trim();
     if (!value) { els.photoMatchNote.textContent = `This record has no value in "${layer.column}".`; return; }
@@ -1221,15 +1496,15 @@
     els.photoReport.toggleAttribute("hidden", !state.photos.length);
     els.photoUnlink.toggleAttribute("hidden", !library);
     els.photoRefresh.toggleAttribute("hidden", !library);
-    els.photoFolderButton.textContent = library ? "Link another folder" : "Link photo folder";
+    els.photoFolderButton.textContent = library ? "Link another folder" : "Link image folder";
     els.photoFilesLabel.textContent = library ? "or add more files" : "or pick files";
     if (library) {
       const rescannable = library.sources.some((source) => source.handle);
       els.photoRefresh.title = rescannable
-        ? "Re-scan the linked folders for newly added photos"
+        ? "Re-scan the linked folders for newly added images"
         : "This browser cannot re-scan a folder on its own · pick the folder again";
     }
-    if (!library) { els.photoStatus.textContent = "No photo folder linked"; return; }
+    if (!library) { els.photoStatus.textContent = "No image folder linked"; return; }
     const skipped = library.skipped ? ` · ${library.skipped} non-image skipped` : "";
     const sources = library.sources.length > 1 ? ` (${library.sources.length} sources)` : "";
     let summary = `${library.files.length} image${library.files.length === 1 ? "" : "s"} from ${library.name}${sources}${skipped}`;
@@ -1355,7 +1630,7 @@
     releasePhotoLibrary();
     state.photoLibrary = null;
     renderAll();
-    showToast("All photo sources unlinked");
+    showToast("All image sources unlinked");
   }
 
   function addPhotoLayer() {
@@ -1365,8 +1640,8 @@
     const layer = photoLayer(column);
     state.photos.push(layer);
     selectField(layer.id);
-    if (!state.photoLibrary) showToast(`Photo layer added for {{${column}}} · link a photo folder next`);
-    else showToast(`Photo layer added for {{${column}}}`);
+    if (!state.photoLibrary) showToast(`Dynamic picture added for {{${column}}} · link an image folder next`);
+    else showToast(`Dynamic picture added for {{${column}}}`);
   }
 
   /** The report people should read before exporting 500 certificates. */
@@ -1374,7 +1649,7 @@
     const report = photoMatchReport();
     els.reportSummary.textContent = state.photoLibrary
       ? `${report.matched} of ${report.total} matched · ${report.missing.length} missing`
-      : `No photo folder is linked, so all ${report.total} photo slots are empty.`;
+      : `No image folder is linked, so all ${report.total} dynamic pictures are empty.`;
     const rows = report.missing.slice(0, 200).map((entry) => {
       const row = document.createElement("tr");
       const heading = document.createElement("th");
@@ -1406,7 +1681,7 @@
     state.backgroundImage = null; state.backgroundSourceImage = null; state.backgroundSourceSrc = null; state.backgroundCrop = null;
     state.backgroundName = "Blank canvas";
     state.blankBackground = true;
-    state.fields = []; state.images = []; state.photos = [];
+    state.fields = []; state.images = []; state.photos = []; state.shapes = [];
     state.selectedField = null;
     state.interaction = null; state.cropSession = null;
     renderAll();
@@ -1419,18 +1694,63 @@
     selectField(id); els.fieldText.focus(); els.fieldText.select();
   }
 
-  function deleteField() {
-    const photoIndex = state.photos.findIndex((item) => item.id === state.selectedField);
-    if (photoIndex >= 0) {
-      state.photos.splice(photoIndex, 1);
-      state.selectedField = state.fields[0]?.id || state.images[0]?.id || state.photos[0]?.id || null;
-      renderFields(); renderFieldList(); populateForm();
-      return;
+  /** Which list a layer lives in, and what to call it. */
+  const LAYER_KINDS = [
+    { kind: "shape", label: "Shape", list: () => state.shapes },
+    { kind: "photo", label: "Dynamic picture", list: () => state.photos },
+    { kind: "image", label: "Picture", list: () => state.images },
+    { kind: "text", label: "Text", list: () => state.fields }
+  ];
+
+  function layerBucket(id) {
+    for (const bucket of LAYER_KINDS) {
+      const index = bucket.list().findIndex((item) => item.id === id);
+      if (index >= 0) return { ...bucket, index, item: bucket.list()[index] };
     }
-    const imageIndex = state.images.findIndex((item) => item.id === state.selectedField);
-    if (imageIndex >= 0) {
-      state.images.splice(imageIndex, 1);
-      state.selectedField = state.fields[0]?.id || state.images[0]?.id || state.photos[0]?.id || null;
+    return null;
+  }
+
+  /** A copy of a layer, nudged so it does not hide the original. Picture
+   *  layers deliberately share the decoded bitmap: same pixels, no re-decode. */
+  function cloneLayer(item, kind) {
+    const copy = { ...item, id: `${kind}-${Date.now()}-${Math.round(Math.random() * 1000)}` };
+    const height = copy.height ?? (copy.size ? copy.size * 1.3 : 0);
+    copy.x = clamp(copy.x + 18, 0, Math.max(0, DESIGN.width - copy.width));
+    copy.y = clamp(copy.y + 18, 0, Math.max(0, DESIGN.height - height));
+    return copy;
+  }
+
+  function copySelectedLayer() {
+    const bucket = layerBucket(state.selectedField);
+    if (!bucket) { showToast("Select a layer to copy", true); return; }
+    state.clipboard = { kind: bucket.kind, label: bucket.label, item: { ...bucket.item } };
+    showToast(`${bucket.label} layer copied · Ctrl V to paste`);
+  }
+
+  function pasteLayer() {
+    const entry = state.clipboard;
+    if (!entry) { showToast("Nothing copied yet", true); return; }
+    const bucket = LAYER_KINDS.find((candidate) => candidate.kind === entry.kind);
+    const copy = cloneLayer(entry.item, entry.kind);
+    bucket.list().push(copy);
+    selectField(copy.id);
+    showToast(`${entry.label} layer pasted`);
+  }
+
+  function duplicateSelectedLayer() {
+    const bucket = layerBucket(state.selectedField);
+    if (!bucket) { showToast("Select a layer to duplicate", true); return; }
+    const copy = cloneLayer(bucket.item, bucket.kind);
+    bucket.list().splice(bucket.index + 1, 0, copy);
+    selectField(copy.id);
+    showToast(`${bucket.label} layer duplicated`);
+  }
+
+  function deleteField() {
+    const bucket = layerBucket(state.selectedField);
+    if (bucket && bucket.kind !== "text") {
+      bucket.list().splice(bucket.index, 1);
+      state.selectedField = state.fields[0]?.id || state.images[0]?.id || state.photos[0]?.id || state.shapes[0]?.id || null;
       renderFields(); renderFieldList(); populateForm();
       return;
     }
@@ -1451,6 +1771,7 @@
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
     drawBackground(ctx);
+    state.shapes.forEach((item) => drawShapeLayer(ctx, item));
     state.images.forEach((item) => {
       ctx.save();
       ctx.globalAlpha = item.opacity;
@@ -1701,7 +2022,7 @@
     state.backgroundImage = null; state.backgroundSourceImage = null; state.backgroundSourceSrc = null; state.backgroundCrop = null; state.backgroundName = "Sample template";
     state.blankBackground = false;
     setDesignSize(1200, 848);
-    state.records = clone(sampleRecords); state.fields = clone(sampleFields); state.images = []; state.photos = []; state.currentRecord = 0; state.selectedField = "name";
+    state.records = clone(sampleRecords); state.fields = clone(sampleFields); state.images = []; state.photos = []; state.shapes = []; state.currentRecord = 0; state.selectedField = "name";
     renderAll(); showToast("Sample certificate restored");
   }
 
@@ -1721,6 +2042,8 @@
   els.clearBackground.addEventListener("click", () => { state.backgroundImage = null; state.backgroundSourceImage = null; state.backgroundSourceSrc = null; state.backgroundCrop = null; state.backgroundName = "Sample template"; state.blankBackground = false; setDesignSize(1200, 848); renderAll(); showToast("Sample template restored"); });
   els.blankTemplate.addEventListener("click", applyBlankTemplate);
   els.addPhoto.addEventListener("click", addPhotoLayer);
+  els.addShape.addEventListener("click", addShapeLayer);
+  els.duplicateField.addEventListener("click", duplicateSelectedLayer);
   els.photoFolderButton.addEventListener("click", pickPhotoFolder);
   els.photoFolder.addEventListener("change", (event) => handlePhotoPick(event, true));
   els.photoFiles.addEventListener("change", (event) => handlePhotoPick(event, false));
@@ -1774,6 +2097,42 @@
     els.imageOpacityValue.textContent = `${value}%`;
     updateSelected("opacity", value / 100);
   });
+  els.shapeKind.addEventListener("change", (event) => {
+    const item = getSelectedShape();
+    if (!item) return;
+    const previous = item.kind;
+    item.kind = event.target.value;
+    // A line has no interior; every other kind is an area shape, so coming back
+    // from a line always restores the fill rather than leaving an empty box.
+    if (item.kind === "line") { item.filled = false; if (!(item.strokeWidth > 0)) item.strokeWidth = 4; }
+    else if (previous === "line" || (!item.filled && !(item.strokeWidth > 0))) item.filled = true;
+    renderFields(); renderFieldList(); populateForm();
+  });
+  els.shapeSides.addEventListener("input", (event) => updateSelected("sides", clamp(Math.round(Number(event.target.value) || 5), 3, 16)));
+  els.shapeRadius.addEventListener("input", (event) => updateSelected("radius", Math.max(0, Number(event.target.value) || 0)));
+  els.shapeFilled.addEventListener("change", (event) => updateSelected("filled", event.target.checked));
+  els.shapeFill.addEventListener("input", (event) => { els.shapeFillText.value = event.target.value; updateSelected("fill", event.target.value); });
+  els.shapeFillText.addEventListener("change", (event) => { if (/^#[0-9a-f]{6}$/i.test(event.target.value)) { els.shapeFill.value = event.target.value; updateSelected("fill", event.target.value); } else populateForm(); });
+  els.shapeStroke.addEventListener("input", (event) => { els.shapeStrokeText.value = event.target.value; updateSelected("stroke", event.target.value); });
+  els.shapeStrokeText.addEventListener("change", (event) => { if (/^#[0-9a-f]{6}$/i.test(event.target.value)) { els.shapeStroke.value = event.target.value; updateSelected("stroke", event.target.value); } else populateForm(); });
+  els.shapeStrokeWidth.addEventListener("input", (event) => updateSelected("strokeWidth", clamp(Number(event.target.value) || 0, 0, 80)));
+  els.shapeX.addEventListener("input", (event) => updateSelected("x", clamp(Number(event.target.value) || 0, 0, DESIGN.width)));
+  els.shapeY.addEventListener("input", (event) => updateSelected("y", clamp(Number(event.target.value) || 0, 0, DESIGN.height)));
+  els.shapeWidth.addEventListener("input", (event) => updateSelected("width", clamp(Number(event.target.value) || 4, 4, DESIGN.width)));
+  els.shapeHeight.addEventListener("input", (event) => updateSelected("height", clamp(Number(event.target.value) || 4, 4, DESIGN.height)));
+  els.shapeRotation.addEventListener("input", (event) => updateSelected("rotation", normalizeRotation(event.target.value)));
+  els.shapeOpacity.addEventListener("input", (event) => {
+    const value = clamp(Number(event.target.value) || 100, 10, 100);
+    els.shapeOpacityValue.textContent = `${value}%`;
+    updateSelected("opacity", value / 100);
+  });
+  els.zoomIn.addEventListener("click", () => zoomStep(1));
+  els.zoomOut.addEventListener("click", () => zoomStep(-1));
+  els.zoomFit.addEventListener("click", () => setZoom("fit"));
+  els.zoomLabel.addEventListener("click", () => setZoom(1));
+  els.shell.addEventListener("wheel", handleStageWheel, { passive: false });
+  els.shell.addEventListener("pointerdown", startPan);
+  document.addEventListener("keydown", handleShortcut);
   els.alignment.addEventListener("click", (event) => { const button = event.target.closest("button[data-align]"); if (button) { updateSelected("align", button.dataset.align); populateForm(); } });
   els.stage.addEventListener("pointermove", moveFieldInteraction);
   els.stage.addEventListener("pointerup", endFieldInteraction);
