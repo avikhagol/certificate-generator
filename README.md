@@ -40,7 +40,7 @@ GitHub strips `<iframe>` from READMEs, so the image above links to the video. Th
 - TXT files with one recipient name per line
 - PNG, JPEG, or WebP backgrounds that set the certificate's native dimensions
 - Multiple independently movable, resizable, replaceable, and croppable picture layers
-- Per-recipient photo layers matched by filename from a local folder
+- Per-recipient photo layers matched by filename from one or more local folders, refreshable in place
 - Fixed text and variable placeholder fields
 - Local custom font uploads (`.ttf`, `.otf`, `.woff`, and `.woff2`)
 - Drag, resize, rotate, nudge, style, align, add, and delete text and picture layers
@@ -112,6 +112,14 @@ Matching is forgiving. It tries the exact value first, then the filename on its 
 
 If a CSV column contains values that all end in `.png`, `.jpg` or `.webp`, the app notices after an upload and suggests adding a photo layer.
 
+### Several folders, and a refresh
+
+The library is cumulative. **Link another folder** adds a second, third or tenth folder to the same pool, and **or add more files** appends individual images — useful when the headshots arrive in batches, or when a handful of latecomers live somewhere else. Every source is matched against your CSV as one library, and the status line shows how many images came from how many sources. **Unlink** clears all of them.
+
+**Refresh** re-scans the linked folders so photos dropped in after linking appear without rebuilding anything, and reports what changed (`3 added, 1 gone`). Re-scanning needs a browser that supports the File System Access API — Chrome, Edge and other Chromium browsers — because only then does the app hold a handle to the folder rather than a one-time copy of its file list. In Firefox and Safari the folder is picked through the classic file dialog, so **Refresh** asks you to pick the folder again; re-picking the same folder updates it in place instead of adding a duplicate.
+
+Re-picking a folder replaces that source's file list wholesale, so deletions and renames are picked up too.
+
 ### Fit, shape and gaps
 
 Recipient photos arrive in every aspect ratio, so each layer has a **fit** rather than a fixed crop: **Cover** fills the box and crops the overflow (the right default for portraits), **Contain** fits the whole image inside, and **Fill** stretches it. Layers can be rectangular or circular, and they move, resize, rotate and take opacity like any other layer.
@@ -120,7 +128,7 @@ When a row has no matching file the layer is left empty, or draws a dashed place
 
 ### What is and is not saved
 
-Photo layers are saved into `.certproj.json` as a **binding** — the column name, geometry, fit and shape — never the photos themselves. Embedding hundreds of recipient images would push a project past the autosave limits, and the files are yours to keep. After opening a saved project, link the photo folder again and every layer resolves.
+Photo layers are saved into `.certproj.json` as a **binding** — the column name, geometry, fit and shape — never the photos themselves. Embedding hundreds of recipient images would push a project past the autosave limits, and the files are yours to keep. After opening a saved project, link the photo folders again and every layer resolves.
 
 Photos are decoded once and downscaled to the largest size the layer actually needs, and only a small number are held in memory at a time, so a large batch does not exhaust it.
 

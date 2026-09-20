@@ -50,7 +50,8 @@
   const $ = (id) => document.getElementById(id);
   const els = {
     stage: $("certificateStage"), stageViewport: $("stageViewport"), shell: $("canvasShell"), background: $("backgroundCanvas"), fieldLayer: $("fieldLayer"),
-    dataUpload: $("dataUpload"), photoFolder: $("photoFolderInput"), photoFiles: $("photoFilesInput"), photoStatus: $("photoLibraryStatus"), photoReport: $("photoReportButton"), photoUnlink: $("photoUnlinkButton"),
+    dataUpload: $("dataUpload"), photoFolder: $("photoFolderInput"), photoFolderButton: $("photoFolderButton"), photoFiles: $("photoFilesInput"), photoFilesLabel: $("photoFilesLabel"),
+    photoStatus: $("photoLibraryStatus"), photoReport: $("photoReportButton"), photoRefresh: $("photoRefreshButton"), photoUnlink: $("photoUnlinkButton"),
     blankTemplate: $("blankTemplateButton"), addPhoto: $("addPhotoButton"),
     photoForm: $("photoForm"), photoColumn: $("photoColumn"), photoFit: $("photoFit"), photoShape: $("photoShape"), photoMissing: $("photoMissing"),
     photoX: $("photoX"), photoY: $("photoY"), photoWidth: $("photoWidth"), photoHeight: $("photoHeight"), photoRotation: $("photoRotation"),
@@ -146,8 +147,26 @@
     return PHOTO_EXTENSIONS.some((extension) => name.endsWith(extension));
   }
 
-  function buildPhotoLibrary(fileList, folderName) {
-    const files = Array.from(fileList || []).filter(isPhotoFile);
+  function createPhotoLibrary() {
+    return { name: "", sources: [], files: [], exact: new Map(), loose: new Map(), collisions: [], urls: new Map(), skipped: 0 };
+  }
+
+  /** Same file, picked twice: compare what a browser actually gives us. */
+  const fileIdentity = (file) => `${file.webkitRelativePath || file.name}|${file.size}|${file.lastModified}`;
+
+  function photoLibraryLabel(library) {
+    const names = library.sources.map((source) => source.name);
+    if (!names.length) return "no sources";
+    if (names.length === 1) return names[0];
+    if (names.length === 2) return `${names[0]} + ${names[1]}`;
+    return `${names[0]} + ${names.length - 1} more`;
+  }
+
+  /** Rebuild the lookup tables from every linked source. Runs after any add,
+   *  refresh, or drop, so the match keys never drift from library.files. */
+  function reindexPhotoLibrary(library) {
+    const files = [];
+    library.sources.forEach((source) => files.push(...source.files));
     const exact = new Map();
     const loose = new Map();
     const collisions = [];
@@ -162,7 +181,82 @@
         else if (!loose.has(key)) loose.set(key, file);
       });
     });
-    return { name: folderName, files, exact, loose, collisions, urls: new Map(), skipped: Array.from(fileList || []).length - files.length };
+    const live = new Set(files);
+    library.urls.forEach((url, file) => {
+      if (live.has(file)) return;
+      URL.revokeObjectURL(url);
+      library.urls.delete(file);
+    });
+    library.files = files;
+    library.exact = exact;
+    library.loose = loose;
+    library.collisions = collisions;
+    library.skipped = library.sources.reduce((total, source) => total + source.skipped, 0);
+    library.name = photoLibraryLabel(library);
+    return library;
+  }
+
+  function photoSourceFiles(fileList) {
+    const all = Array.from(fileList || []);
+    const files = all.filter(isPhotoFile);
+    return { files, skipped: all.length - files.length };
+  }
+
+  /** A folder re-picked later should update in place, not pile up a duplicate. */
+  async function findPhotoSource(library, entry) {
+    for (const source of library.sources) {
+      if (source.kind !== entry.kind) continue;
+      if (entry.kind === "files") return source;
+      if (entry.handle && source.handle) {
+        try { if (await source.handle.isSameEntry(entry.handle)) return source; } catch (error) { /* stale handle */ }
+        continue;
+      }
+      if (!entry.handle && !source.handle && source.name === entry.name) return source;
+    }
+    return null;
+  }
+
+  function uniqueSourceName(library, name) {
+    const taken = new Set(library.sources.map((source) => source.name));
+    if (!taken.has(name)) return name;
+    let suffix = 2;
+    while (taken.has(`${name} (${suffix})`)) suffix++;
+    return `${name} (${suffix})`;
+  }
+
+  /** Merge one pick into the library. Returns null when it held no images. */
+  async function addPhotoSource(entry) {
+    const library = state.photoLibrary || createPhotoLibrary();
+    const { files, skipped } = photoSourceFiles(entry.fileList);
+    if (!files.length) return null;
+    const existing = await findPhotoSource(library, entry);
+    let added = files.length;
+    let source = existing;
+    if (existing) {
+      const seen = new Set(existing.files.map(fileIdentity));
+      const fresh = files.filter((file) => !seen.has(fileIdentity(file)));
+      added = fresh.length;
+      if (entry.kind === "files") {
+        existing.files = existing.files.concat(fresh);   // loose picks accumulate
+        existing.skipped += skipped;
+      } else {
+        existing.files = files;                          // a folder is re-scanned wholesale
+        existing.skipped = skipped;
+      }
+      if (entry.handle) existing.handle = entry.handle;
+    } else {
+      source = {
+        id: `source-${Date.now()}-${library.sources.length}`,
+        kind: entry.kind,
+        name: uniqueSourceName(library, entry.name),
+        handle: entry.handle || null,
+        files,
+        skipped
+      };
+      library.sources.push(source);
+    }
+    state.photoLibrary = reindexPhotoLibrary(library);
+    return { added, source, replaced: Boolean(existing) };
   }
 
   /** Resolve one CSV cell to a picked file, or null when nothing matches. */
@@ -1126,9 +1220,19 @@
     const library = state.photoLibrary;
     els.photoReport.toggleAttribute("hidden", !state.photos.length);
     els.photoUnlink.toggleAttribute("hidden", !library);
+    els.photoRefresh.toggleAttribute("hidden", !library);
+    els.photoFolderButton.textContent = library ? "Link another folder" : "Link photo folder";
+    els.photoFilesLabel.textContent = library ? "or add more files" : "or pick files";
+    if (library) {
+      const rescannable = library.sources.some((source) => source.handle);
+      els.photoRefresh.title = rescannable
+        ? "Re-scan the linked folders for newly added photos"
+        : "This browser cannot re-scan a folder on its own · pick the folder again";
+    }
     if (!library) { els.photoStatus.textContent = "No photo folder linked"; return; }
     const skipped = library.skipped ? ` · ${library.skipped} non-image skipped` : "";
-    let summary = `${library.files.length} image${library.files.length === 1 ? "" : "s"} from ${library.name}${skipped}`;
+    const sources = library.sources.length > 1 ? ` (${library.sources.length} sources)` : "";
+    let summary = `${library.files.length} image${library.files.length === 1 ? "" : "s"} from ${library.name}${sources}${skipped}`;
     if (state.photos.length) {
       const report = photoMatchReport();
       summary += ` · ${report.matched} of ${report.total} matched`;
@@ -1136,35 +1240,122 @@
     els.photoStatus.textContent = summary;
   }
 
-  function linkPhotoLibrary(fileList, folderName) {
-    const library = buildPhotoLibrary(fileList, folderName);
-    if (!library.files.length) { showToast("No PNG, JPEG, or WebP images were found there.", true); return; }
-    releasePhotoLibrary();
-    state.photoLibrary = library;
+  async function linkPhotoFiles(entry) {
+    const result = await addPhotoSource(entry);
+    if (!result) { showToast("No PNG, JPEG, or WebP images were found there.", true); return; }
     renderAll();
+    const library = state.photoLibrary;
     const report = state.photos.length ? photoMatchReport() : null;
-    if (report && report.missing.length) showToast(`${library.files.length} images linked · ${report.missing.length} records still unmatched`, true);
-    else showToast(`${library.files.length} images linked from ${library.name}`);
+    const headline = result.replaced
+      ? `${result.added} new image${result.added === 1 ? "" : "s"} from ${result.source.name} · ${library.files.length} linked`
+      : `${result.added} image${result.added === 1 ? "" : "s"} linked from ${result.source.name} · ${library.files.length} total`;
+    if (report && report.missing.length) showToast(`${headline} · ${report.missing.length} records still unmatched`, true);
+    else showToast(headline);
   }
 
   function handlePhotoPick(event, isFolder) {
     const files = event.target.files;
     if (files && files.length) {
-      const first = files[0];
-      const path = (first.webkitRelativePath || "").split("/");
-      const folder = isFolder ? (path.length > 1 ? path[0] : "selected folder") : "selected files";
-      linkPhotoLibrary(files, folder);
+      const path = (files[0].webkitRelativePath || "").split("/");
+      const name = isFolder ? (path.length > 1 ? path[0] : "selected folder") : "picked files";
+      linkPhotoFiles({ kind: isFolder ? "folder" : "files", name, handle: null, fileList: files });
     } else if (isFolder) {
       showToast("That folder is empty, or the browser blocked reading it.", true);
     }
     event.target.value = "";
   }
 
+  /** Walk a directory handle the way webkitdirectory does: every nested file. */
+  async function readDirectoryFiles(handle, prefix = handle.name) {
+    const files = [];
+    for await (const entry of handle.values()) {
+      const path = `${prefix}/${entry.name}`;
+      if (entry.kind === "directory") {
+        files.push(...await readDirectoryFiles(entry, path));
+      } else if (entry.kind === "file") {
+        const file = await entry.getFile();
+        try { Object.defineProperty(file, "webkitRelativePath", { value: path, configurable: true }); }
+        catch (error) { /* keep the bare filename */ }
+        files.push(file);
+      }
+    }
+    return files;
+  }
+
+  async function ensureFolderPermission(handle) {
+    if (typeof handle.queryPermission !== "function") return true;
+    const options = { mode: "read" };
+    if (await handle.queryPermission(options) === "granted") return true;
+    return await handle.requestPermission(options) === "granted";
+  }
+
+  /** Prefer a directory handle when the browser has one: it can be re-scanned
+   *  later without asking the user to find the folder again. */
+  async function pickPhotoFolder() {
+    if (typeof window.showDirectoryPicker === "function") {
+      let handle = null;
+      try {
+        handle = await window.showDirectoryPicker({ id: "certificate-photos", mode: "read" });
+      } catch (error) {
+        if (error && error.name === "AbortError") return;   // user closed the dialog
+      }
+      if (handle) {
+        setBusy(true);
+        try {
+          await linkPhotoFiles({ kind: "folder", name: handle.name, handle, fileList: await readDirectoryFiles(handle) });
+        } catch (error) {
+          showToast("That folder could not be read.", true);
+        } finally { setBusy(false); }
+        return;
+      }
+    }
+    els.photoFolder.click();
+  }
+
+  /** Re-scan linked folders so photos added after linking show up. */
+  async function refreshPhotoLibrary() {
+    const library = state.photoLibrary;
+    if (!library) return;
+    const rescannable = library.sources.filter((source) => source.handle);
+    if (!rescannable.length) {
+      showToast("This browser cannot re-scan a folder · pick it again to refresh", true);
+      pickPhotoFolder();
+      return;
+    }
+    setBusy(true);
+    let added = 0;
+    let removed = 0;
+    let failed = 0;
+    try {
+      for (const source of rescannable) {
+        try {
+          if (!await ensureFolderPermission(source.handle)) { failed++; continue; }
+          const { files, skipped } = photoSourceFiles(await readDirectoryFiles(source.handle));
+          const before = new Set(source.files.map(fileIdentity));
+          const after = new Set(files.map(fileIdentity));
+          files.forEach((file) => { if (!before.has(fileIdentity(file))) added++; });
+          source.files.forEach((file) => { if (!after.has(fileIdentity(file))) removed++; });
+          source.files = files;
+          source.skipped = skipped;
+        } catch (error) { failed++; }
+      }
+      reindexPhotoLibrary(library);
+    } finally { setBusy(false); }
+    photoCache.clear();
+    renderAll();
+    const skippedNote = library.sources.length > rescannable.length
+      ? ` · ${library.sources.length - rescannable.length} source${library.sources.length - rescannable.length === 1 ? "" : "s"} cannot be re-scanned`
+      : "";
+    if (failed) showToast(`${failed} folder${failed === 1 ? "" : "s"} could not be read · ${library.files.length} images linked`, true);
+    else if (added || removed) showToast(`Refreshed · ${added} added, ${removed} gone · ${library.files.length} images linked${skippedNote}`);
+    else showToast(`No changes found · ${library.files.length} images linked${skippedNote}`);
+  }
+
   function unlinkPhotoLibrary() {
     releasePhotoLibrary();
     state.photoLibrary = null;
     renderAll();
-    showToast("Photo folder unlinked");
+    showToast("All photo sources unlinked");
   }
 
   function addPhotoLayer() {
@@ -1530,8 +1721,10 @@
   els.clearBackground.addEventListener("click", () => { state.backgroundImage = null; state.backgroundSourceImage = null; state.backgroundSourceSrc = null; state.backgroundCrop = null; state.backgroundName = "Sample template"; state.blankBackground = false; setDesignSize(1200, 848); renderAll(); showToast("Sample template restored"); });
   els.blankTemplate.addEventListener("click", applyBlankTemplate);
   els.addPhoto.addEventListener("click", addPhotoLayer);
+  els.photoFolderButton.addEventListener("click", pickPhotoFolder);
   els.photoFolder.addEventListener("change", (event) => handlePhotoPick(event, true));
   els.photoFiles.addEventListener("change", (event) => handlePhotoPick(event, false));
+  els.photoRefresh.addEventListener("click", refreshPhotoLibrary);
   els.photoUnlink.addEventListener("click", unlinkPhotoLibrary);
   els.photoReport.addEventListener("click", () => openPhotoReport(false));
   els.photoColumn.addEventListener("change", (event) => { updateSelected("column", event.target.value); populateForm(); updatePhotoStatus(); });

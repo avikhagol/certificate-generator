@@ -80,21 +80,20 @@
             <h2>Recipient photos</h2>
           </div>
           <div class="photo-library-actions">
-            <label class="button button-quiet upload-button" for="photoFolderInput" title="Pick a folder of images; nothing is uploaded">
-              Link photo folder
-              <input id="photoFolderInput" type="file" multiple webkitdirectory directory hidden />
-            </label>
+            <button class="button button-quiet" id="photoFolderButton" type="button" title="Pick a folder of images; nothing is uploaded">Link photo folder</button>
+            <input id="photoFolderInput" type="file" multiple webkitdirectory directory hidden />
             <label class="text-button upload-button" for="photoFilesInput">
-              or pick files
+              <span id="photoFilesLabel">or pick files</span>
               <input id="photoFilesInput" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden />
             </label>
           </div>
           <p class="photo-library-status" id="photoLibraryStatus">No photo folder linked</p>
           <div class="photo-library-links">
+            <button class="text-button" id="photoRefreshButton" type="button" hidden>Refresh</button>
             <button class="text-button" id="photoReportButton" type="button" hidden>Match report</button>
             <button class="text-button" id="photoUnlinkButton" type="button" hidden>Unlink</button>
           </div>
-          <p class="photo-library-hint">Matched by filename against a column in your CSV. Files stay on this device and are not saved into project files.</p>
+          <p class="photo-library-hint">Matched by filename against a column in your CSV. Link several folders or file batches to build one library. Files stay on this device and are not saved into project files.</p>
         </div>
 
         <div class="section-title-row">
