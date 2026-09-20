@@ -39,6 +39,11 @@
             <option value="xhigh" selected>XHigh · 3×</option>
           </select>
         </label>
+        <button class="button button-quiet" id="saveProjectButton" type="button" title="Download this design as a self-contained .certproj.json file">Save project</button>
+        <label class="button button-quiet upload-button" for="loadProjectInput" title="Open a previously saved .certproj.json project">
+          Load project
+          <input id="loadProjectInput" type="file" accept=".json,application/json" hidden />
+        </label>
         <button class="button button-quiet" id="resetButton" type="button">Reset</button>
         <button class="button button-primary" id="downloadPngButton" type="button">Download PNG</button>
         <button class="button button-primary" id="downloadPdfButton" type="button">Download PDF</button>
@@ -250,6 +255,18 @@
       </aside>
     </main>
 
+    <div class="restore-banner" id="restoreBanner" role="region" aria-label="Restore autosaved design" hidden>
+      <div class="restore-copy">
+        <strong>Restore your last design?</strong>
+        <span id="restoreBannerMeta">Autosaved on this device</span>
+      </div>
+      <div class="restore-actions">
+        <button class="button button-quiet" id="restoreDiscardButton" type="button">Discard</button>
+        <button class="button button-quiet" id="restoreDismissButton" type="button">Not now</button>
+        <button class="button button-accent" id="restoreApplyButton" type="button">Restore</button>
+      </div>
+    </div>
+
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <div class="progress-overlay" id="progressOverlay" hidden>
       <div class="progress-card">
@@ -297,6 +314,7 @@
       </form>
     </dialog>
 
+    <script src="assets/project-io.js"></script>
     <script src="assets/app.js"></script>
     <script src="assets/video-embed.js"></script>
   </body>

@@ -532,9 +532,10 @@
       const fontFace = new FontFace(family, await file.arrayBuffer());
       await fontFace.load();
       document.fonts.add(fontFace);
-      state.customFonts.push({ family, displayName, fileName: file.name, fontFace });
+      state.customFonts.push({ family, displayName, fileName: file.name, fontFace, data: await fontFileBase64(file) });
       const option = document.createElement("option");
       option.value = family;
+      option.dataset.customFont = "1";
       option.textContent = `${displayName} · custom`;
       els.fieldFont.append(option);
       els.fieldFont.value = family;
@@ -551,6 +552,15 @@
   function setFontStatus(message, status = "") {
     els.fontStatus.textContent = message;
     els.fontStatus.className = `font-hint${status ? ` ${status}` : ""}`;
+  }
+
+  // project-io hook: keep the raw font bytes so fonts survive save/restore.
+  async function fontFileBase64(file) {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    let binary = "";
+    const chunk = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunk) binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+    return btoa(binary);
   }
 
   function readFileAsDataUrl(file) {
@@ -1060,6 +1070,9 @@
   new ResizeObserver(fitStage).observe(els.shell);
   registerWebMcpTools();
   renderAll();
+
+  // project-io hook: expose a minimal bridge for save / load / autosave.
+  window.CertificateProjectIO?.attach({ state, DESIGN, els, setDesignSize, renderAll, loadImage, showToast });
 
   function registerWebMcpTools() {
     const context = document.modelContext;
