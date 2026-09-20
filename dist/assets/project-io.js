@@ -382,6 +382,7 @@
     state.cropSession = null;
     const allIds = [...state.fields, ...state.images, ...state.photos, ...state.shapes].map((item) => item.id);
     state.selectedField = allIds.includes(data.selectedField) ? data.selectedField : (state.fields[0]?.id ?? null);
+    state.selectedIds = state.selectedField ? [state.selectedField] : [];
 
     if (els.exportQuality) els.exportQuality.value = state.exportQuality;
     renderAll();

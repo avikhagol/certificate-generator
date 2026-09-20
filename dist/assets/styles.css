@@ -116,7 +116,7 @@ button { cursor: pointer; }
 .button:disabled { opacity: .5; cursor: wait; }
 
 .studio {
-  min-height: calc(100vh - 68px - 37px);
+  min-height: calc(100vh - 68px);
   display: grid;
   grid-template-columns: 260px minmax(430px, 1fr) 300px;
 }
@@ -130,6 +130,21 @@ button { cursor: pointer; }
 
 .data-panel { border-right: 1px solid var(--line); }
 .properties-panel { border-left: 1px solid var(--line); }
+.studio.data-hidden { grid-template-columns: minmax(430px, 1fr) 300px; }
+.studio.layers-hidden { grid-template-columns: 260px minmax(430px, 1fr); }
+.studio.data-hidden.layers-hidden { grid-template-columns: minmax(0, 1fr); }
+.panel[hidden] { display: none !important; }
+.pane-controls { display: flex; gap: 12px; margin-top: 8px; white-space: nowrap; }
+.pane-controls button { font-size: .72rem; }
+.project-link { margin-top: 24px; font-size: .75rem; }
+details > summary { cursor: pointer; font-weight: 650; }
+.photo-library > summary { margin-bottom: 10px; }
+.shortcut-help { margin-top: 8px; text-align: left; }
+.shortcut-help > summary { text-align: center; }
+.shortcut-help dl { display: grid; grid-template-columns: minmax(140px, 1fr) 1fr; gap: 8px 16px; max-width: 580px; margin: 16px auto; }
+.shortcut-help dt { font-weight: 650; }
+.shortcut-help dd { margin: 0; }
+.shortcut-help > p { text-align: center; }
 
 .panel-heading {
   min-height: 42px;
@@ -320,6 +335,8 @@ textarea { resize: vertical; line-height: 1.4; }
 
 #backgroundCanvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 #fieldLayer { position: absolute; inset: 0; }
+.selection-marquee { position: absolute; border: 1.5px solid #2d68c4; background: rgba(45, 104, 196, .12); pointer-events: none; z-index: 2; }
+.multi-selection .canvas-field .resize-handle, .multi-selection .canvas-field .rotate-handle { display: none; }
 
 .canvas-field {
   position: absolute;
@@ -476,6 +493,9 @@ textarea { resize: vertical; line-height: 1.4; }
 
 @media (max-width: 1120px) {
   .studio { grid-template-columns: 230px minmax(420px, 1fr); }
+  .studio.data-hidden { grid-template-columns: minmax(0, 1fr); }
+  .studio.layers-hidden { grid-template-columns: 230px minmax(420px, 1fr); }
+  .studio.data-hidden.layers-hidden { grid-template-columns: minmax(0, 1fr); }
   .properties-panel { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--line); display: grid; grid-template-columns: minmax(220px, .7fr) 1.3fr; gap: 20px; }
   .properties-panel > .panel-heading, .properties-panel > .layers { grid-column: 1; }
   .properties-panel > .properties-heading, .properties-panel > .field-form, .properties-panel > .export-summary { grid-column: 2; }

@@ -51,19 +51,10 @@
       </div>
     </header>
 
-    <div class="claims" role="note" aria-label="What this tool guarantees">
-      <span class="claim"><span class="claim-mark" aria-hidden="true">✓</span>No signup, no upload, no backend</span>
-      <span class="claim"><span class="claim-mark" aria-hidden="true">✓</span>Zero dependencies, zero build step</span>
-      <span class="claim"><span class="claim-mark" aria-hidden="true">✓</span>Works offline once loaded</span>
-      <span class="claim"><span class="claim-mark" aria-hidden="true">✓</span>Unlimited certificates, free forever</span>
-      <span class="claim"><span class="claim-mark" aria-hidden="true">✓</span>MIT licensed &amp; self-hostable</span>
-    </div>
-
     <main class="studio">
-      <aside class="panel data-panel" aria-label="Certificate data">
+      <aside class="panel data-panel" id="dataPanel" aria-label="Certificate data">
         <div class="panel-heading">
-          <p class="eyebrow">Step 1</p>
-          <h1>Recipients</h1>
+          <h1>Data</h1>
           <span class="count-pill" id="recordCount">3 records</span>
         </div>
 
@@ -75,10 +66,8 @@
         </label>
         <button class="text-button" id="sampleDataButton" type="button">Restore sample data</button>
 
-        <div class="photo-library">
-          <div class="section-title-row">
-            <h2>Dynamic pictures</h2>
-          </div>
+        <details class="photo-library">
+          <summary>Dynamic pictures</summary>
           <div class="photo-library-actions">
             <button class="button button-quiet" id="photoFolderButton" type="button" title="Pick a folder of recipient images; nothing is uploaded">Link image folder</button>
             <input id="photoFolderInput" type="file" multiple webkitdirectory directory hidden />
@@ -93,8 +82,8 @@
             <button class="text-button" id="photoReportButton" type="button" hidden>Match report</button>
             <button class="text-button" id="photoUnlinkButton" type="button" hidden>Unlink</button>
           </div>
-          <p class="photo-library-hint">Matched by filename against a column in your CSV. Link several folders or file batches to build one library. Files stay on this device and are not saved into project files.</p>
-        </div>
+          <p class="photo-library-hint">Match a CSV filename to a local image. Relink folders after loading a project.</p>
+        </details>
 
         <div class="section-title-row">
           <h2>Preview record</h2>
@@ -113,21 +102,12 @@
         </div>
 
         <div class="placeholder-box">
-          <h2>Available placeholders</h2>
+          <h2>Placeholders</h2>
           <div class="chips" id="placeholderChips"></div>
           <p>Click a placeholder to add it to the selected text.</p>
         </div>
 
-        <aside class="github-card" aria-label="Support on GitHub">
-          <span class="github-star" aria-hidden="true">★</span>
-          <div>
-            <strong>Found useful?</strong>
-            <p>Star the repository to follow updates and support the project.</p>
-            <a href="https://github.com/avikhagol/certificate-generator" target="_blank" rel="noopener noreferrer">
-              Star on GitHub <span aria-hidden="true">↗</span>
-            </a>
-          </div>
-        </aside>
+        <p class="project-link"><a href="https://github.com/avikhagol/certificate-generator" target="_blank" rel="noopener noreferrer">GitHub ↗</a></p>
 
         <!--<aside class="video-card" aria-label="Watch the demo video">
           <strong>Watch the 2-minute demo</strong>
@@ -146,8 +126,11 @@
       <section class="workspace" aria-label="Certificate preview">
         <div class="workspace-toolbar">
           <div>
-            <p class="eyebrow">Step 2</p>
-            <h2>Design your certificate</h2>
+            <h2>Canvas</h2>
+            <div class="pane-controls" role="group" aria-label="Side panels">
+              <button class="text-button" id="toggleDataPanel" type="button" aria-controls="dataPanel" aria-expanded="true">Hide Data</button>
+              <button class="text-button" id="toggleLayersPanel" type="button" aria-controls="layersPanel" aria-expanded="true">Hide Layers</button>
+            </div>
           </div>
           <div class="toolbar-group">
             <label class="button button-quiet upload-button" for="backgroundUpload">
@@ -175,16 +158,34 @@
             <div class="certificate-stage" id="certificateStage" tabindex="0" aria-label="Certificate canvas. Select and drag layers to position them.">
               <canvas id="backgroundCanvas" width="1200" height="848"></canvas>
               <div id="fieldLayer"></div>
+              <div id="selectionMarquee" class="selection-marquee" hidden aria-hidden="true"></div>
             </div>
           </div>
         </div>
 
-        <p class="canvas-help">Drag a layer to move it, the corner handle to resize, arrow keys to nudge. Ctrl + scroll zooms, Ctrl C / Ctrl V copy and paste, Delete removes a layer.</p>
+        <div class="canvas-help">
+          <p>Drag to move · Shift-click to select more · Drag empty space to box-select</p>
+          <details class="shortcut-help">
+            <summary>Keyboard &amp; resize shortcuts</summary>
+            <dl>
+              <dt>Arrow keys / Shift + arrows</dt><dd>Move selection 1 / 10 px</dd>
+              <dt>Ctrl C / V / D</dt><dd>Copy / paste / duplicate selection</dd>
+              <dt>Delete / Backspace</dt><dd>Delete selection</dd>
+              <dt>Ctrl ↑ / ↓</dt><dd>Move one layer forward / backward</dd>
+              <dt>Ctrl Shift ↑ / ↓</dt><dd>Move selection to top / bottom</dd>
+              <dt>Shift while resizing</dt><dd>Keep ratio (also Ctrl Shift)</dd>
+              <dt>Ctrl while resizing</dt><dd>Equal width and height</dd>
+              <dt>Shift while rotating</dt><dd>Snap to 15°</dd>
+              <dt>Ctrl + scroll / Ctrl 0</dt><dd>Zoom / fit canvas</dd>
+              <dt>Escape</dt><dd>Clear selection</dd>
+            </dl>
+            <p>Use Command instead of Ctrl on Mac. Shortcuts leave text editing alone.</p>
+          </details>
+        </div>
       </section>
 
-      <aside class="panel properties-panel" aria-label="Layer settings">
+      <aside class="panel properties-panel" id="layersPanel" aria-label="Layer settings">
         <div class="panel-heading">
-          <p class="eyebrow">Step 3</p>
           <h2>Layers</h2>
           <div class="layer-actions">
             <button class="button button-quiet layer-add-button" id="addFieldButton" type="button">+ Text</button>
@@ -192,15 +193,15 @@
             <button class="button button-quiet layer-add-button" id="addShapeButton" type="button" title="Add a shape: rectangle, ellipse, triangle, polygon or star">+ Shape</button>
             <button class="button button-quiet layer-add-button" id="addPhotoButton" type="button" title="Add a dynamic picture: a different image for every recipient">+ Dynamic</button>
           </div>
-          <p class="image-layer-hint">Topmost layer first. ↑ / ↓ reorder one layer; Ctrl ↑ / ↓ do the same. Ctrl Shift ↑ / ↓ move to the top / bottom.</p>
+          <p class="image-layer-hint">Top layer first · Shift-click to select more</p>
         </div>
         <div class="layers" id="fieldList" aria-label="Layers, topmost first"></div>
 
         <div class="section-title-row properties-heading">
           <h2 id="selectedLayerLabel">Selected text</h2>
           <div class="properties-actions">
-            <button class="text-button" id="duplicateFieldButton" type="button" title="Duplicate this layer · Ctrl D">Duplicate</button>
-            <button class="danger-link" id="deleteFieldButton" type="button" title="Delete this layer · Delete or Backspace">Delete</button>
+            <button class="text-button" id="duplicateFieldButton" type="button" title="Duplicate selection · Ctrl D">Duplicate</button>
+            <button class="danger-link" id="deleteFieldButton" type="button" title="Delete selection · Delete or Backspace">Delete</button>
           </div>
         </div>
 
@@ -280,7 +281,6 @@
             <span class="form-label">Opacity</span>
             <div class="range-row"><input id="imageOpacity" type="range" min="10" max="100" step="1" /><output id="imageOpacityValue">100%</output></div>
           </label>
-          <p class="image-layer-hint">Add as many pictures as needed. Each layer can be moved, resized, replaced, or removed independently.</p>
         </form>
 
         <form id="shapeForm" class="field-form shape-form" autocomplete="off" hidden>
@@ -334,7 +334,7 @@
             <span class="form-label">Opacity</span>
             <div class="range-row"><input id="shapeOpacity" type="range" min="10" max="100" step="1" /><output id="shapeOpacityValue">100%</output></div>
           </label>
-          <p class="image-layer-hint">Reorder shapes in the layer list to place bands, badges, dividers and frames above or below other layers.</p>
+          <p class="image-layer-hint">Resize: Shift keeps ratio · Ctrl makes a square or circle</p>
         </form>
 
         <form id="photoForm" class="field-form photo-form" autocomplete="off" hidden>

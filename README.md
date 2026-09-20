@@ -1,234 +1,112 @@
 # Certificate Generator
 
-**Turn a CSV into hundreds of certificates — PNG and PDF — without uploading anything.**
+Create personalized certificates from CSV or TXT. Export PNG, PDF, or a ZIP of the whole batch. Your files stay on your device.
 
-[**▶ Open the app**](https://avikhagol.github.io/certificate-generator/) · [Watch the demo](https://www.youtube.com/watch?v=e_CAPwU1Hbw) · MIT licensed
+[Open the app](https://avikhagol.github.io/certificate-generator/) · [Watch the demo](https://www.youtube.com/watch?v=e_CAPwU1Hbw)
 
-[![Certificate Generator — CSV to certificates in one click](dist/assets/social-preview.png)](https://www.youtube.com/watch?v=e_CAPwU1Hbw)
+## Quick start
 
-A fully static, browser-based certificate generator. Upload recipient data, customize text and picture layers on a live certificate canvas, and export individual PNG/PDF files or a ZIP containing the full batch.
+1. **Data:** load a CSV or TXT file.
+2. **Canvas:** choose a background or start with a blank template.
+3. **Layers:** add text, pictures, or shapes. Use placeholders such as `{{name}}`.
+4. **Preview:** check a few records using the left/right record buttons.
+5. **Download:** choose PNG, PDF, or **Download all (.zip)**.
 
-## Why this one
+Use **Hide Data** and **Hide Layers** for more canvas space. The same buttons bring them back.
 
-| | |
+## Select and edit
+
+| Action | How |
 | --- | --- |
-| **Zero dependencies** | No npm packages, no CDN scripts, no frameworks. The ZIP writer and the PDF writer are hand-written in plain JavaScript. |
-| **Zero build step** | What you see in `dist/` is what ships. Clone it, open `index.html`, done. |
-| **Under 100 KB of code** | The whole editor is one HTML file, one stylesheet and a handful of small scripts. |
-| **No backend, no signup, no upload** | Recipient data, background artwork and font files never leave your browser. There is no server to send them to. |
-| **Works offline** | Once the page has loaded it needs no network. Run it from a USB stick on an air-gapped machine. |
-| **Agent-ready** | Registers [WebMCP](https://github.com/webmachinelearning/webmcp) tools, so an AI browser agent can drive the editor and generate a batch for you. |
-| **MIT licensed** | Fork it, rebrand it, host it for your own institution. |
+| Select one element | Click it on the canvas or in Layers |
+| Add/remove an element from selection | Shift-click |
+| Select an area | Drag a rectangle from empty canvas space |
+| Add an area to selection | Shift-drag from empty space |
+| Move the selection | Drag a selected element, or use arrow keys |
+| Move faster | Shift + arrow keys moves 10 px |
+| Copy / paste / duplicate | Ctrl C / Ctrl V / Ctrl D |
+| Delete selected elements | Delete or Backspace |
+| Clear selection | Escape |
 
-Check the claims yourself: there is no `package.json` anywhere in this repository, and `dist/index.html` loads nothing but its own relative `assets/`.
+A selection rectangle includes elements it touches. Copies keep their relative positions and stacking order.
 
-If Certificate Generator is useful to you, [star the repository](https://github.com/avikhagol/certificate-generator) to follow updates and support the project.
+**On Mac:** use Command instead of Ctrl. Keyboard shortcuts leave typing in form fields alone.
 
-## Demo
+### Size, rotation, and stacking
 
-<p align="center">
-  <a href="https://www.youtube.com/watch?v=e_CAPwU1Hbw">
-    <img src="dist/assets/social-preview.png" alt="Generate batch certificates online for free — CSV to PNG and PDF" width="640">
-  </a>
-</p>
+- **Resize:** drag the corner handle of a single selected element.
+- **Keep ratio:** hold Shift or Ctrl+Shift when resizing shapes or dynamic pictures.
+- **Square or circle:** hold Ctrl alone. Also works when editing Width or Height.
+- **Rotate:** drag the round handle. Shift snaps to 15°.
+- **Reorder:** use the ↑/↓ buttons, or Ctrl+↑/↓ for one position.
+- **Top/bottom:** Ctrl+Shift+↑/↓. The first layer in the list is on top.
 
-GitHub strips `<iframe>` from READMEs, so the image above links to the video. The app page itself has a click-to-play embed.
+Ordinary picture layers always keep their aspect ratio. To edit an element's properties, select it on its own.
 
-## Features
+### Zoom
 
-- CSV files with any header names; headers become placeholders such as `{{name}}`
-- TXT files with one recipient name per line
-- PNG, JPEG, or WebP backgrounds that set the certificate's native dimensions
-- Multiple independently movable, resizable, replaceable, and croppable picture layers
-- Dynamic pictures: a per-recipient image matched by filename from one or more local folders, refreshable in place
-- Shape layers — rectangle, rounded rectangle, ellipse, triangle, diamond, polygon, star and line — with fill, border and rotation
-- Copy, paste, duplicate and delete any layer with Ctrl C / Ctrl V / Ctrl D / Delete
-- Zoom from fit to 5× and beyond, with Ctrl + scroll, keyboard shortcuts and drag panning
-- Fixed text and variable placeholder fields
-- Local custom font uploads (`.ttf`, `.otf`, `.woff`, and `.woff2`)
-- Drag, resize, rotate, nudge, style, align, add, duplicate, and delete every layer
-- Live preview for every record
-- Selectable Normal, High, and XHigh PNG and landscape A4 PDF export quality
-- Batch ZIP with high-resolution PNG and PDF folders
-- Save and load complete projects as a single self-contained `.certproj.json` file
-- Automatic IndexedDB autosave with a dismissible restore prompt on the next visit
-- Blank canvas mode for designing from scratch
-- Responsive interface with sample data and a built-in template
+Ctrl + scroll zooms around the pointer. **Fit** or Ctrl 0 shows the whole canvas. When zoomed in, scroll or middle-button drag to pan.
 
-## Data format
+## Prepare your data
 
-CSV example:
+CSV headers become placeholders:
 
 ```csv
-name,course,date,organization
-Avinash Kumar,Discover Camp,19 September 2026,RAD@home India
-Lorem Ipsum,Discover Camp,19 September 2026,RAD@home India
+name,course,date
+Alex Morgan,Discovery Camp,19 September 2026
+Sam Rivera,Discovery Camp,19 September 2026
 ```
 
-Each header is available as a placeholder. For example, `{{course}}` resolves to the course value for the selected recipient.
+Use `{{name}}`, `{{course}}`, or `{{date}}` in a text layer. Any column name works.
 
-For a simple list, use a `.txt` file with one name per line. This creates a single `{{name}}` placeholder.
+For names only, use a TXT file with **one name per line**.
 
-## Custom fonts
+## Pictures and fonts
 
-Select a text layer, then choose **+ Custom** beside the Font menu. Uploaded TTF, OTF, WOFF, and WOFF2 files are loaded only in the current browser session and are immediately available in the live preview and every export. Font files are never uploaded to a server.
+- **Background:** PNG, JPEG, or WebP. The canvas takes the image's dimensions.
+- **Picture layers:** logos, signatures, portraits, and seals. Crop or replace them independently.
+- **Custom fonts:** choose **+ Custom** beside Font. Supports TTF, OTF, WOFF, and WOFF2.
+- **Shapes:** rectangles, ellipses, triangles, diamonds, polygons, stars, and lines.
 
-Custom fonts are restored automatically when you load a saved project or accept an autosave restore point, because the font file itself is stored inside the project. Fonts uploaded in a session that was never saved must be reselected after reloading the page. Ensure that the font's license permits use in generated certificates.
+### A different picture for each record
 
-## Saving and loading projects
+1. Add an image filename column to the CSV, such as `photo`.
+2. Open **Dynamic pictures** in Data and link the image folder.
+3. Add a **+ Dynamic** layer and choose that column.
+4. Check the **Match report** for missing images.
 
-Use **Save project** in the top toolbar to download the whole design as a single self-contained `*.certproj.json` file: all text layers, picture layers, shape layers, dynamic picture bindings, their rotation angles, the background image and its crop, canvas dimensions, recipient records, export quality, and every uploaded font file. Recipient images are the one exception — see [Dynamic pictures](#dynamic-pictures). Images and fonts are embedded as base64, so the file needs no companion assets and can be emailed, archived, or shared.
+Use **Cover** to fill the frame, **Contain** to show the whole image, or **Fill** to stretch it. Link more folders or refresh as needed.
 
-Use **Load project** to reopen such a file. Images are rebuilt and custom fonts are re-registered, so the live preview and every export match what was saved. Files that are not valid projects, or that were written by a newer schema version, are rejected with an explanatory message and leave the current design untouched.
+**After reopening a project, relink these folders.** Dynamic image files are not embedded in the project.
 
-Project files carry a `schema` identifier and an integer `version`. The current version is **3**, which saves the order across all layer types. Version 1 and 2 files still open with their original stacking order.
+## Save your work
 
-Because backgrounds are embedded at full resolution, project files can reach several megabytes; the app warns you when a save exceeds roughly 12 MB but never truncates anything.
+**Save project** downloads a `.certproj.json` file. **Load project** restores the design, data, pictures, fonts, and layer order.
 
-### Autosave and restore
+The browser also autosaves when storage is available and offers to restore your work on your next visit. Keep a downloaded project as your backup.
 
-The working design is autosaved to IndexedDB in this browser every few seconds and when the tab is hidden or closed, so an accidental tab close does not lose the work. On the next visit a dismissible banner offers to **Restore** it — nothing is ever overwritten silently. **Not now** keeps the restore point for later and **Discard** deletes it. `localStorage` is not used because embedded images exceed its quota. If IndexedDB is unavailable (private browsing, blocked storage, or an exhausted quota) autosave is skipped silently and every other feature keeps working.
+## Export
 
-## Backgrounds and picture layers
-
-Uploading a background changes the certificate canvas to the image's exact pixel dimensions. Use **Crop background** to choose only the area you need; the certificate then adopts the cropped image's exact dimensions and aspect ratio. Existing text and picture positions are scaled proportionally so the layout stays aligned.
-
-Use **Add picture** to place logos, signatures, portraits, seals, or other artwork above the background. You can add multiple pictures, then crop, move, resize, adjust opacity, replace, or delete each layer independently. The crop editor supports freeform, square, 4:3, 16:9, and current-certificate aspect ratios. Picture layers are included in PNG, PDF, and ZIP exports and never leave the browser.
-
-## Shapes
-
-**+ Shape** adds a vector layer that is drawn straight into the certificate: **rectangle** (a square is just an equal width and height), **rounded rectangle**, **ellipse**, **triangle**, **diamond**, **polygon** with 3–16 sides, **star** with 3–16 points, and **line**. Each shape carries a fill colour, a border colour and width, opacity and rotation, and is moved, resized and rotated exactly like every other layer.
-
-Shapes are stored as geometry, not pixels, and the same SVG path drives both the on-screen preview and the export, so a band or badge stays crisp at any export scale. All layer types share one stacking order; newly added layers appear on top.
-
-The layer list shows the topmost layer first. Use its **↑ / ↓** buttons or **Ctrl ↑ / ↓** to move a layer one position. **Ctrl Shift ↑** brings the selected layer to the top; **Ctrl Shift ↓** sends it to the bottom. These shortcuts also accept Command on macOS and are ignored while editing a form field or using a dialog. Reordering is preserved in project saves, autosaves, and PNG/PDF/batch exports.
-
-## Copy, paste and duplicate
-
-Any layer — text, picture, dynamic picture or shape — can be copied with **Ctrl C** and pasted with **Ctrl V**, or duplicated in one step with **Ctrl D** or the **Duplicate** button next to Delete. **Delete** or **Backspace** removes the selected layer, the same as the Delete button; both are ignored while you are typing in a field, where they edit text as usual, and the last remaining text field is always kept. The copy lands 18 px down and to the right of the original and becomes the selected layer, so pressing Ctrl V repeatedly walks a row of identical badges across the canvas. Copied picture layers share the already-decoded bitmap, so duplicating a large photo costs no extra memory and no re-decode. The clipboard is internal to the page: it holds one layer at a time and does not touch the system clipboard, so Ctrl C still copies text normally while you are typing in a field.
-
-## Zoom and panning
-
-The zoom control sits in the canvas toolbar: **−**, the current percentage (click it to jump to 100%), **+**, and **Fit**.
-
-- **Ctrl + scroll** zooms around the pointer, so the detail under the cursor stays put.
-- **Ctrl +**, **Ctrl −** and **Ctrl 0** step in, step out, and return to Fit.
-- Scroll, trackpad-swipe, or drag with the middle mouse button to pan once the canvas is larger than the viewport.
-
-The ceiling is at least **5×**, and rises to whatever it takes to fill the viewport with a **100 × 100 design-pixel** region — up to 16× — so you can align a seal or a hairline rule pixel by pixel. Zooming never changes the design: it only changes how the canvas is displayed, and exports always render at the chosen quality preset.
-
-## Dynamic pictures
-
-A dynamic picture shows a **different image for every row of your CSV** — headshots, signatures, team logos. Add one with **+ Dynamic**, point it at the CSV column holding the filenames, and link the folder those files live in.
-
-### Why a folder, not a path
-
-A browser cannot open a path. If your CSV says `C:\photos\ada.jpg`, no web page is allowed to read that file — it is a hard security boundary, not a missing feature. So the column is treated as a **lookup key** rather than a path: you hand the app a folder with **Link image folder**, and it matches your CSV values against the files you picked. Nothing is uploaded and nothing leaves the device, exactly as with backgrounds and fonts.
-
-Matching is forgiving. It tries the exact value first, then the filename on its own, then the filename without its extension, and finally a loose comparison that ignores case, accents, spaces, hyphens and underscores. All of these find the same file:
-
-| CSV value | Matches |
-| --- | --- |
-| `ada.jpg` | `ada.jpg` |
-| `C:\Users\avi\photos\ada.jpg` | `ada.jpg` |
-| `ADA.JPG` | `ada.jpg` |
-| `ada` | `ada.jpg` |
-| `jose nunez` | `josé-núñez.png` |
-
-If a CSV column contains values that all end in `.png`, `.jpg` or `.webp`, the app notices after an upload and suggests adding a dynamic picture.
-
-### Several folders, and a refresh
-
-The library is cumulative. **Link another folder** adds a second, third or tenth folder to the same pool, and **or add more files** appends individual images — useful when the headshots arrive in batches, or when a handful of latecomers live somewhere else. Every source is matched against your CSV as one library, and the status line shows how many images came from how many sources. **Unlink** clears all of them.
-
-**Refresh** re-scans the linked folders so photos dropped in after linking appear without rebuilding anything, and reports what changed (`3 added, 1 gone`). Re-scanning needs a browser that supports the File System Access API — Chrome, Edge and other Chromium browsers — because only then does the app hold a handle to the folder rather than a one-time copy of its file list. In Firefox and Safari the folder is picked through the classic file dialog, so **Refresh** asks you to pick the folder again; re-picking the same folder updates it in place instead of adding a duplicate.
-
-Re-picking a folder replaces that source's file list wholesale, so deletions and renames are picked up too.
-
-### Fit, shape and gaps
-
-Recipient images arrive in every aspect ratio, so each layer has a **fit** rather than a fixed crop: **Cover** fills the box and crops the overflow (the right default for portraits), **Contain** fits the whole image inside, and **Fill** stretches it. Layers can be rectangular or circular, and they move, resize, rotate and take opacity like any other layer.
-
-When a row has no matching file the layer is left empty, or draws a dashed placeholder box if you prefer — your choice per layer. The **Match report** lists exactly which rows are unmatched, and a batch export that would leave gaps stops and shows you that report first, so you find out before you send five hundred certificates rather than after.
-
-### What is and is not saved
-
-Dynamic pictures are saved into `.certproj.json` as a **binding** — the column name, geometry, fit and shape — never the images themselves. Embedding hundreds of recipient images would push a project past the autosave limits, and the files are yours to keep. After opening a saved project, link the image folders again and every layer resolves.
-
-Images are decoded once and downscaled to the largest size the layer actually needs, and only a small number are held in memory at a time, so a large batch does not exhaust it.
-
-## Blank canvas
-
-**Blank template** clears every text, picture, dynamic picture and shape layer and leaves a plain white canvas at the current dimensions, for designing something from scratch rather than editing the built-in sample. **Use sample template** brings the decorated 1200 × 848 template back, and **Reset** restores the whole sample certificate.
-
-## Rotation
-
-Every layer carries its own rotation angle. Select a layer and either drag the round handle that appears above it or type an angle into the **Rotation** field in the sidebar. Hold **Shift** while dragging to snap to 15° steps. Angles are stored in degrees and folded into the range −180° to 180°, so 200° and −160° are the same value.
-
-A layer turns around the centre of its own box: for a picture that is the centre of the image, and for a text layer it is the horizontal centre of the field and the vertical middle of the wrapped text block. The preview and the exported PNG, PDF, and ZIP use exactly the same pivot, so what you see on screen is what is rendered.
-
-Two consequences are worth knowing. Because a text layer's pivot depends on how many lines the text wraps to, a rotated field whose text wraps to a different number of lines for a different recipient will pivot around a correspondingly different point — the block stays centred on itself in each case. And because X, Y, and Width still describe the *unrotated* box, a rotated layer can extend past the canvas edge; it is clipped identically in the preview and in exports.
-
-Rotation is stored in `.certproj.json` files. Project files written before this feature load fine and their layers simply start at 0°.
-
-## Export quality
-
-Choose a quality preset in the top toolbar before downloading:
-
-| Preset | Render scale | Best for |
+| Quality | Scale | Use |
 | --- | --- | --- |
-| Normal | Original background dimensions | Quick drafts and screen sharing |
-| High | 2× background dimensions | Everyday digital use and smaller prints |
-| XHigh | 3× background dimensions | Professional printing |
+| Normal | 1× | Quick previews |
+| High | 2× | General use |
+| XHigh | 3× | Sharper output, larger files |
 
-Higher settings create larger files and use more browser memory. The selected preset applies to PNG, PDF, and batch ZIP exports.
+The quality setting applies to PNG, PDF, and ZIP exports. For large batches, split the data into smaller files if memory runs low.
 
 ## Run locally
 
-Serve the `dist` folder with any static file server. For example:
+No install or build step. Open `dist/index.html`, or serve the folder:
 
 ```bash
 python3 -m http.server 4173 --directory dist
 ```
 
-Then open `http://localhost:4173`.
+Then visit `http://localhost:4173`.
 
-Opening `dist/index.html` directly also works in modern browsers, but a local server is recommended for consistent behavior.
-
-## Deploy to GitHub Pages
-
-The included workflow deploys `dist/` whenever the `main` branch is pushed.
-
-1. Push this repository to GitHub with `main` as the default branch.
-2. Open **Settings → Pages** in the GitHub repository.
-3. Under **Build and deployment**, choose **GitHub Actions** as the source.
-4. Open the **Actions** tab and wait for **Deploy to GitHub Pages** to finish.
-
-The site will be available at `https://<account>.github.io/<repository>/`. All asset paths are relative, so project Pages URLs work without changes.
-
-You can also run the workflow manually from the Actions tab.
-
-## Project structure
-
-```text
-dist/
-  index.html
-  assets/
-    app.js
-    project-io.js
-    styles.css
-    social-preview.png
-.github/workflows/deploy-pages.yml
-LICENSE
-README.md
-```
-
-## Browser support
-
-Use a current version of Chrome, Edge, Firefox, or Safari. Large batches are generated in memory; for hundreds of high-resolution certificates, split the input into smaller files if the browser becomes memory-constrained.
-
-For best printed results, start with a high-resolution background. Higher export scales make text and picture layers sharper, but cannot restore detail missing from a low-resolution background image.
+For GitHub Pages, choose **Settings → Pages → GitHub Actions**. The included workflow publishes `dist/` when `main` is pushed.
 
 ## License
 
-[MIT](LICENSE) © Avinash Kumar
+[MIT](LICENSE) · [Source on GitHub](https://github.com/avikhagol/certificate-generator)
