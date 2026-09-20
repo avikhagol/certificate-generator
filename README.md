@@ -18,6 +18,8 @@ No recipient data or uploaded artwork leaves the browser. The app has no backend
 - Live preview for every record
 - Selectable Normal, High, and XHigh PNG and landscape A4 PDF export quality
 - Batch ZIP with high-resolution PNG and PDF folders
+- Save and load complete projects as a single self-contained `.certproj.json` file
+- Automatic IndexedDB autosave with a dismissible restore prompt on the next visit
 - Responsive interface with sample data and a built-in template
 
 ## Data format
@@ -38,7 +40,21 @@ For a simple list, use a `.txt` file with one name per line. This creates a sing
 
 Select a text layer, then choose **+ Custom** beside the Font menu. Uploaded TTF, OTF, WOFF, and WOFF2 files are loaded only in the current browser session and are immediately available in the live preview and every export. Font files are never uploaded to a server.
 
-Custom fonts must be reselected after reloading the page. Ensure that the font's license permits use in generated certificates.
+Custom fonts are restored automatically when you load a saved project or accept an autosave restore point, because the font file itself is stored inside the project. Fonts uploaded in a session that was never saved must be reselected after reloading the page. Ensure that the font's license permits use in generated certificates.
+
+## Saving and loading projects
+
+Use **Save project** in the top toolbar to download the whole design as a single self-contained `*.certproj.json` file: all text layers, picture layers, the background image and its crop, canvas dimensions, recipient records, export quality, and every uploaded font file. Images and fonts are embedded as base64, so the file needs no companion assets and can be emailed, archived, or shared.
+
+Use **Load project** to reopen such a file. Images are rebuilt and custom fonts are re-registered, so the live preview and every export match what was saved. Files that are not valid projects, or that were written by a newer schema version, are rejected with an explanatory message and leave the current design untouched.
+
+Project files carry a `schema` identifier and an integer `version`. The current version is **1**.
+
+Because backgrounds are embedded at full resolution, project files can reach several megabytes; the app warns you when a save exceeds roughly 12 MB but never truncates anything.
+
+### Autosave and restore
+
+The working design is autosaved to IndexedDB in this browser every few seconds and when the tab is hidden or closed, so an accidental tab close does not lose the work. On the next visit a dismissible banner offers to **Restore** it — nothing is ever overwritten silently. **Not now** keeps the restore point for later and **Discard** deletes it. `localStorage` is not used because embedded images exceed its quota. If IndexedDB is unavailable (private browsing, blocked storage, or an exhausted quota) autosave is skipped silently and every other feature keeps working.
 
 ## Backgrounds and picture layers
 
@@ -90,6 +106,7 @@ dist/
   index.html
   assets/
     app.js
+    project-io.js
     styles.css
 .github/workflows/deploy-pages.yml
 README.md
