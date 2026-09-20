@@ -81,7 +81,7 @@ Use **Save project** in the top toolbar to download the whole design as a single
 
 Use **Load project** to reopen such a file. Images are rebuilt and custom fonts are re-registered, so the live preview and every export match what was saved. Files that are not valid projects, or that were written by a newer schema version, are rejected with an explanatory message and leave the current design untouched.
 
-Project files carry a `schema` identifier and an integer `version`. The current version is **2**, which added shape layers; version 1 files still open, simply without any shapes.
+Project files carry a `schema` identifier and an integer `version`. The current version is **3**, which saves the order across all layer types. Version 1 and 2 files still open with their original stacking order.
 
 Because backgrounds are embedded at full resolution, project files can reach several megabytes; the app warns you when a save exceeds roughly 12 MB but never truncates anything.
 
@@ -99,7 +99,9 @@ Use **Add picture** to place logos, signatures, portraits, seals, or other artwo
 
 **+ Shape** adds a vector layer that is drawn straight into the certificate: **rectangle** (a square is just an equal width and height), **rounded rectangle**, **ellipse**, **triangle**, **diamond**, **polygon** with 3–16 sides, **star** with 3–16 points, and **line**. Each shape carries a fill colour, a border colour and width, opacity and rotation, and is moved, resized and rotated exactly like every other layer.
 
-Shapes are stored as geometry, not pixels, and the same SVG path drives both the on-screen preview and the export, so a band or badge stays crisp at any export scale. They render below every picture and text layer, which is what you want for colour bands, badges, dividers and frames.
+Shapes are stored as geometry, not pixels, and the same SVG path drives both the on-screen preview and the export, so a band or badge stays crisp at any export scale. All layer types share one stacking order; newly added layers appear on top.
+
+The layer list shows the topmost layer first. Use its **↑ / ↓** buttons or **Ctrl Shift ↑ / ↓** to move a layer one position. **Ctrl ↑** brings the selected layer to the top; **Ctrl ↓** sends it to the bottom. These shortcuts also accept Command on macOS and are ignored while editing a form field or using a dialog. Reordering is preserved in project saves, autosaves, and PNG/PDF/batch exports.
 
 ## Copy, paste and duplicate
 

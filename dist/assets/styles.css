@@ -353,6 +353,10 @@ textarea { resize: vertical; line-height: 1.4; }
 .layers { display: flex; flex-direction: column; gap: 5px; padding-bottom: 14px; border-bottom: 1px solid var(--line); max-height: 200px; overflow: auto; }
 .layer-button { width: 100%; border: 1px solid transparent; background: transparent; color: var(--ink); min-height: 42px; border-radius: 7px; display: grid; grid-template-columns: 30px minmax(0,1fr); align-items: center; text-align: left; padding: 6px; gap: 7px; }
 .layer-button:hover { background: #f4f6f9; }
+.layer-row { display: grid; grid-template-columns: minmax(0, 1fr) 28px 28px; align-items: center; gap: 3px; }
+.layer-move { border: 1px solid var(--line); border-radius: 5px; background: white; color: var(--ink); min-height: 30px; cursor: pointer; }
+.layer-move:hover:not(:disabled) { background: #eef3fb; }
+.layer-move:disabled { opacity: .35; cursor: default; }
 .layer-button.selected { background: #eef3fb; border-color: #b6c8e5; }
 .layer-icon { width: 28px; height: 28px; border-radius: 5px; display: grid; place-items: center; background: white; border: 1px solid var(--line); font-family: Georgia, serif; font-weight: 700; }
 .layer-copy { overflow: hidden; }

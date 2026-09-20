@@ -192,8 +192,9 @@
             <button class="button button-quiet layer-add-button" id="addShapeButton" type="button" title="Add a shape: rectangle, ellipse, triangle, polygon or star">+ Shape</button>
             <button class="button button-quiet layer-add-button" id="addPhotoButton" type="button" title="Add a dynamic picture: a different image for every recipient">+ Dynamic</button>
           </div>
+          <p class="image-layer-hint">Topmost layer first. ↑ / ↓ reorder one layer; Ctrl Shift ↑ / ↓ do the same. Ctrl ↑ / ↓ move to the top / bottom.</p>
         </div>
-        <div class="layers" id="fieldList"></div>
+        <div class="layers" id="fieldList" aria-label="Layers, topmost first"></div>
 
         <div class="section-title-row properties-heading">
           <h2 id="selectedLayerLabel">Selected text</h2>
@@ -333,7 +334,7 @@
             <span class="form-label">Opacity</span>
             <div class="range-row"><input id="shapeOpacity" type="range" min="10" max="100" step="1" /><output id="shapeOpacityValue">100%</output></div>
           </label>
-          <p class="image-layer-hint">Shapes sit under every picture and text layer, so they work as bands, badges, dividers and frames.</p>
+          <p class="image-layer-hint">Reorder shapes in the layer list to place bands, badges, dividers and frames above or below other layers.</p>
         </form>
 
         <form id="photoForm" class="field-form photo-form" autocomplete="off" hidden>

@@ -8,7 +8,8 @@
  * Project file format (.certproj.json):
  * {
  *   "schema": "certificate-generator.project",
- *   "version": 1,
+ *   "version": 3,
+ *   "layerOrder": [ "layer-id-back", "layer-id-front" ],
  *   "app": "Certificate Generator",
  *   "savedAt": "<ISO 8601>",
  *   "design":  { "width": 1200, "height": 848 },
@@ -42,7 +43,7 @@
   "use strict";
 
   const SCHEMA = "certificate-generator.project";
-  const VERSION = 2;   // v2 added shape layers; v1 files still open
+  const VERSION = 3;   // v3 adds a shared layer order; v1/v2 files still open
   const FILE_SUFFIX = ".certproj.json";
   const LARGE_FILE_BYTES = 12 * 1024 * 1024;   // warn the user above this
   const AUTOSAVE_MAX_BYTES = 80 * 1024 * 1024; // refuse to autosave beyond this
@@ -144,6 +145,7 @@
       records: JSON.parse(JSON.stringify(state.records || [])),
       currentRecord: num(state.currentRecord, 0),
       selectedField: state.selectedField ?? null,
+      layerOrder: [...state.layerOrder],
       exportQuality: state.exportQuality || "xhigh",
       fields: (state.fields || []).map((item) => ({
         id: item.id, text: item.text, x: item.x, y: item.y, width: item.width,
@@ -192,6 +194,9 @@
     if (!Number.isInteger(version) || version < 1) throw new Error("This project file has an invalid version number.");
     if (version > VERSION) throw new Error(`This project was saved by a newer version (v${version}). Update the app to open it.`);
     if (!Array.isArray(data.fields)) throw new Error("This project file has a damaged text field list.");
+    if (data.layerOrder !== undefined && (!Array.isArray(data.layerOrder) || data.layerOrder.some((id) => typeof id !== "string"))) {
+      throw new Error("This project file has a damaged layer order.");
+    }
     if (!Array.isArray(data.records) || data.records.length === 0) throw new Error("This project file has no recipient records.");
     if (data.images && !Array.isArray(data.images)) throw new Error("This project file has a damaged picture layer list.");
     if (data.fonts && !Array.isArray(data.fonts)) throw new Error("This project file has a damaged font list.");
@@ -363,6 +368,7 @@
       .map(sanitizePhoto)
       .filter((layer) => layer.column);
     state.shapes = (Array.isArray(data.shapes) ? data.shapes : []).filter(isObject).map(sanitizeShape);
+    state.layerOrder = [...(data.layerOrder || [])];
     state.records = JSON.parse(JSON.stringify(data.records));
     state.currentRecord = Math.min(Math.max(0, num(data.currentRecord, 0)), state.records.length - 1);
     state.backgroundImage = backgroundImage;
@@ -498,6 +504,7 @@
       state.backgroundName, (state.backgroundSourceSrc || "").length, state.backgroundCrop, Boolean(state.blankBackground),
       state.photos,
       state.shapes,
+      state.layerOrder,
       state.customFonts.map((font) => font.family)
     ]);
   }

@@ -32,6 +32,7 @@
     images: [],
     photos: [],
     shapes: [],
+    layerOrder: [], // Back to front, shared by every layer type.
     photoLibrary: null,
     clipboard: null,
     zoom: "fit",
@@ -658,6 +659,39 @@
     fitStage();
   }
 
+  function orderedLayers() {
+    const layers = [
+      ...state.shapes.map((item) => ({ item, type: "shape" })),
+      ...state.images.map((item) => ({ item, type: "image" })),
+      ...state.photos.map((item) => ({ item, type: "photo" })),
+      ...state.fields.map((item) => ({ item, type: "text" }))
+    ];
+    const remaining = new Map(layers.map((layer) => [layer.item.id, layer]));
+    const ordered = [];
+    for (const id of state.layerOrder) {
+      if (remaining.has(id)) ordered.push(remaining.get(id));
+      remaining.delete(id);
+    }
+    ordered.push(...remaining.values());
+    state.layerOrder = ordered.map(({ item }) => item.id);
+    return ordered;
+  }
+
+  function moveLayer(id, direction, toEdge = false) {
+    orderedLayers();
+    const index = state.layerOrder.indexOf(id);
+    if (index < 0) return;
+    const target = toEdge ? (direction > 0 ? state.layerOrder.length - 1 : 0)
+      : clamp(index + direction, 0, state.layerOrder.length - 1);
+    if (index === target) return;
+    state.layerOrder.splice(index, 1);
+    state.layerOrder.splice(target, 0, id);
+    selectField(id);
+    const button = [...els.fieldList.querySelectorAll(".layer-button")].find((node) => node.dataset.id === id);
+    button?.focus({ preventScroll: true });
+    button?.scrollIntoView({ block: "nearest" });
+  }
+
   function renderData() {
     state.currentRecord = Math.max(0, Math.min(state.currentRecord, state.records.length - 1));
     const count = state.records.length;
@@ -755,7 +789,8 @@
       node.addEventListener("pointerdown", startFieldInteraction);
       fragment.append(node);
     });
-    els.fieldLayer.replaceChildren(fragment);
+    const nodes = new Map([...fragment.children].map((node) => [node.dataset.id, node]));
+    els.fieldLayer.replaceChildren(...orderedLayers().map(({ item }) => nodes.get(item.id)));
   }
 
   function resizeHandle() {
@@ -780,11 +815,24 @@
   function alignToFlex(align) { return align === "left" ? "flex-start" : align === "right" ? "flex-end" : "center"; }
 
   function renderFieldList() {
-    const shapeButtons = state.shapes.map((item, index) => createLayerButton(item, "shape", index));
-    const imageButtons = state.images.map((item, index) => createLayerButton(item, "image", index));
-    const photoButtons = state.photos.map((item, index) => createLayerButton(item, "photo", index));
-    const textButtons = state.fields.map((item, index) => createLayerButton(item, "text", index));
-    els.fieldList.replaceChildren(...shapeButtons, ...imageButtons, ...photoButtons, ...textButtons);
+    const layers = orderedLayers().reverse();
+    els.fieldList.replaceChildren(...layers.map(({ item, type }, index) => {
+      const row = document.createElement("div");
+      row.className = "layer-row";
+      row.append(createLayerButton(item, type, index));
+      for (const [label, direction, disabled] of [["Up", 1, index === 0], ["Down", -1, index === layers.length - 1]]) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "layer-move";
+        button.textContent = direction > 0 ? "↑" : "↓";
+        button.title = `Move ${label.toLowerCase()} one layer · Ctrl Shift ${label}`;
+        button.setAttribute("aria-label", `Move layer ${label.toLowerCase()}`);
+        button.disabled = disabled;
+        button.addEventListener("click", () => moveLayer(item.id, direction));
+        row.append(button);
+      }
+      return row;
+    }));
   }
 
   function createLayerButton(item, type, index) {
@@ -1101,6 +1149,11 @@
     }
     if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
     const key = event.key.toLowerCase();
+    if (!typing && getSelectedItem() && ["ArrowUp", "ArrowDown"].includes(event.key)) {
+      event.preventDefault();
+      moveLayer(state.selectedField, event.key === "ArrowUp" ? 1 : -1, !event.shiftKey);
+      return;
+    }
     if (key === "0") { setZoom("fit"); event.preventDefault(); return; }
     if (key === "=" || key === "+") { zoomStep(1); event.preventDefault(); return; }
     if (key === "-" || key === "_") { zoomStep(-1); event.preventDefault(); return; }
@@ -1111,6 +1164,7 @@
   }
 
   function handleStageKeydown(event) {
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
     const item = getSelectedItem();
     if (!item || !["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
     const amount = event.shiftKey ? 10 : 1;
@@ -1693,6 +1747,7 @@
     state.backgroundName = "Blank canvas";
     state.blankBackground = true;
     state.fields = []; state.images = []; state.photos = []; state.shapes = [];
+    state.layerOrder = [];
     state.selectedField = null;
     state.interaction = null; state.cropSession = null;
     renderAll();
@@ -1784,17 +1839,17 @@
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
     drawBackground(ctx);
-    state.shapes.forEach((item) => drawShapeLayer(ctx, item));
-    state.images.forEach((item) => {
+    ctx.textBaseline = "top";
+    orderedLayers().forEach(({ item, type }) => {
+      if (type === "shape") { drawShapeLayer(ctx, item); return; }
+      if (type === "photo") { drawPhotoLayer(ctx, item, photos?.get(item.id) || null); return; }
+      if (type === "text") { drawTextField(ctx, item, resolveText(item.text, record)); return; }
       ctx.save();
       ctx.globalAlpha = item.opacity;
       applyRotation(ctx, item, item.x + item.width / 2, item.y + item.height / 2);
       ctx.drawImage(item.image, item.x, item.y, item.width, item.height);
       ctx.restore();
     });
-    state.photos.forEach((layer) => drawPhotoLayer(ctx, layer, photos?.get(layer.id) || null));
-    ctx.textBaseline = "top";
-    state.fields.forEach((item) => drawTextField(ctx, item, resolveText(item.text, record)));
     return canvas;
   }
 
@@ -2034,6 +2089,7 @@
   function resetApp() {
     state.backgroundImage = null; state.backgroundSourceImage = null; state.backgroundSourceSrc = null; state.backgroundCrop = null; state.backgroundName = "Sample template";
     state.blankBackground = false;
+    state.layerOrder = [];
     setDesignSize(1200, 848);
     state.records = clone(sampleRecords); state.fields = clone(sampleFields); state.images = []; state.photos = []; state.shapes = []; state.currentRecord = 0; state.selectedField = "name";
     renderAll(); showToast("Sample certificate restored");
