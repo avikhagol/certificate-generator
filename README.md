@@ -42,7 +42,7 @@ GitHub strips `<iframe>` from READMEs, so the image above links to the video. Th
 - Multiple independently movable, resizable, replaceable, and croppable picture layers
 - Dynamic pictures: a per-recipient image matched by filename from one or more local folders, refreshable in place
 - Shape layers — rectangle, rounded rectangle, ellipse, triangle, diamond, polygon, star and line — with fill, border and rotation
-- Copy, paste and duplicate any layer with Ctrl C / Ctrl V / Ctrl D
+- Copy, paste, duplicate and delete any layer with Ctrl C / Ctrl V / Ctrl D / Delete
 - Zoom from fit to 5× and beyond, with Ctrl + scroll, keyboard shortcuts and drag panning
 - Fixed text and variable placeholder fields
 - Local custom font uploads (`.ttf`, `.otf`, `.woff`, and `.woff2`)
@@ -103,7 +103,7 @@ Shapes are stored as geometry, not pixels, and the same SVG path drives both the
 
 ## Copy, paste and duplicate
 
-Any layer — text, picture, dynamic picture or shape — can be copied with **Ctrl C** and pasted with **Ctrl V**, or duplicated in one step with **Ctrl D** or the **Duplicate** button next to Delete. The copy lands 18 px down and to the right of the original and becomes the selected layer, so pressing Ctrl V repeatedly walks a row of identical badges across the canvas. Copied picture layers share the already-decoded bitmap, so duplicating a large photo costs no extra memory and no re-decode. The clipboard is internal to the page: it holds one layer at a time and does not touch the system clipboard, so Ctrl C still copies text normally while you are typing in a field.
+Any layer — text, picture, dynamic picture or shape — can be copied with **Ctrl C** and pasted with **Ctrl V**, or duplicated in one step with **Ctrl D** or the **Duplicate** button next to Delete. **Delete** or **Backspace** removes the selected layer, the same as the Delete button; both are ignored while you are typing in a field, where they edit text as usual, and the last remaining text field is always kept. The copy lands 18 px down and to the right of the original and becomes the selected layer, so pressing Ctrl V repeatedly walks a row of identical badges across the canvas. Copied picture layers share the already-decoded bitmap, so duplicating a large photo costs no extra memory and no re-decode. The clipboard is internal to the page: it holds one layer at a time and does not touch the system clipboard, so Ctrl C still copies text normally while you are typing in a field.
 
 ## Zoom and panning
 

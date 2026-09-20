@@ -1088,11 +1088,18 @@
 
   const isTypingTarget = (node) => Boolean(node) && (["INPUT", "TEXTAREA", "SELECT"].includes(node.tagName) || node.isContentEditable);
 
-  /** Document-level shortcuts: copy / paste / duplicate a layer, and zoom. */
+  /** Document-level shortcuts: delete / copy / paste / duplicate a layer, and zoom. */
   function handleShortcut(event) {
-    if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
     if (els.cropDialog.open || els.reportDialog.open) return;
     const typing = isTypingTarget(document.activeElement);
+    if (["Delete", "Backspace"].includes(event.key) && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      // Never while a field has focus: there Delete and Backspace edit text.
+      if (typing || !state.selectedField) return;
+      deleteField();
+      event.preventDefault();
+      return;
+    }
+    if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
     const key = event.key.toLowerCase();
     if (key === "0") { setZoom("fit"); event.preventDefault(); return; }
     if (key === "=" || key === "+") { zoomStep(1); event.preventDefault(); return; }
@@ -1756,6 +1763,7 @@
       bucket.list().splice(bucket.index, 1);
       state.selectedField = state.fields[0]?.id || state.images[0]?.id || state.photos[0]?.id || state.shapes[0]?.id || null;
       renderFields(); renderFieldList(); populateForm();
+      showToast(`${bucket.label} layer deleted`);
       return;
     }
     if (state.fields.length === 1) { showToast("Keep at least one text field.", true); return; }
@@ -1764,6 +1772,7 @@
     state.fields.splice(index, 1);
     state.selectedField = state.fields[Math.min(index, state.fields.length - 1)].id;
     renderFields(); renderFieldList(); populateForm();
+    showToast("Text layer deleted");
   }
 
   function renderCertificate(record, scale = 1, photos = null) {
