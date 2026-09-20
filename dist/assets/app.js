@@ -114,6 +114,7 @@
   /* ------------------------------------------------ per-record photo layers */
 
   const PHOTO_TYPES = ["image/png", "image/jpeg", "image/webp"];
+  const PHOTO_EXTENSIONS = [".png", ".jpg", ".jpeg", ".webp"];
   const PHOTO_CACHE_LIMIT = 24;        // decoded bitmaps kept in memory
   const photoCache = new Map();        // cacheKey -> downscaled <canvas>
 
@@ -136,8 +137,17 @@
    * open — a browser cannot read one — so every value is reduced to a lookup
    * key and matched against files the user explicitly picked.
    */
+  /** Folder picks often hand us files with an empty type, so fall back to the extension. */
+  function isPhotoFile(file) {
+    if (!file) return false;
+    if (PHOTO_TYPES.includes(file.type)) return true;
+    if (file.type) return false;
+    const name = (file.webkitRelativePath || file.name || "").toLowerCase();
+    return PHOTO_EXTENSIONS.some((extension) => name.endsWith(extension));
+  }
+
   function buildPhotoLibrary(fileList, folderName) {
-    const files = Array.from(fileList || []).filter((file) => PHOTO_TYPES.includes(file.type));
+    const files = Array.from(fileList || []).filter(isPhotoFile);
     const exact = new Map();
     const loose = new Map();
     const collisions = [];
@@ -1141,8 +1151,11 @@
     const files = event.target.files;
     if (files && files.length) {
       const first = files[0];
-      const folder = isFolder && first.webkitRelativePath ? first.webkitRelativePath.split("/")[0] : "selected files";
+      const path = (first.webkitRelativePath || "").split("/");
+      const folder = isFolder ? (path.length > 1 ? path[0] : "selected folder") : "selected files";
       linkPhotoLibrary(files, folder);
+    } else if (isFolder) {
+      showToast("That folder is empty, or the browser blocked reading it.", true);
     }
     event.target.value = "";
   }
