@@ -16,8 +16,8 @@
  *   "currentRecord": 0,
  *   "selectedField": "name" | null,
  *   "exportQuality": "normal" | "high" | "xhigh",
- *   "fields":  [ { id, text, x, y, width, size, weight, font, color, align } ],
- *   "images":  [ { id, name, x, y, width, height, opacity,
+ *   "fields":  [ { id, text, x, y, width, size, weight, font, color, align, rotation } ],
+ *   "images":  [ { id, name, x, y, width, height, opacity, rotation,
  *                  crop: { x, y, width, height } | null,
  *                  sourceSrc: "data:image/...;base64,..." } ],
  *   "background": { name, sourceSrc: "data:..." | null,
@@ -52,6 +52,8 @@
 
   const isObject = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
   const num = (value, fallback = 0) => (Number.isFinite(Number(value)) ? Number(value) : fallback);
+  /** Fold any angle into [-180, 180); mirrors normalizeRotation() in app.js. */
+  const rotation = (value) => Math.round((((num(value) % 360) + 540) % 360 - 180) * 10) / 10;
 
   function bytesToBase64(buffer) {
     const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
@@ -135,13 +137,15 @@
       exportQuality: state.exportQuality || "xhigh",
       fields: (state.fields || []).map((item) => ({
         id: item.id, text: item.text, x: item.x, y: item.y, width: item.width,
-        size: item.size, weight: item.weight, font: item.font, color: item.color, align: item.align
+        size: item.size, weight: item.weight, font: item.font, color: item.color, align: item.align,
+        rotation: rotation(item.rotation)
       })),
       images: (state.images || []).map((item) => ({
         id: item.id,
         name: item.name,
         x: item.x, y: item.y, width: item.width, height: item.height,
         opacity: item.opacity,
+        rotation: rotation(item.rotation),
         crop: normalizeCropRect(item.crop),
         sourceSrc: item.sourceSrc || item.src || null
       })).filter((item) => item.sourceSrc),
@@ -191,7 +195,8 @@
       weight: num(item.weight, 400),
       font: String(item.font || "Georgia"),
       color: /^#[0-9a-f]{6}$/i.test(String(item.color)) ? String(item.color) : "#17223b",
-      align: ["left", "center", "right"].includes(item.align) ? item.align : "center"
+      align: ["left", "center", "right"].includes(item.align) ? item.align : "center",
+      rotation: rotation(item.rotation)
     };
   }
 
@@ -272,6 +277,7 @@
           width: Math.max(1, num(entry.width, 100)),
           height: Math.max(1, num(entry.height, 100)),
           opacity: Math.min(1, Math.max(0, num(entry.opacity, 1))),
+          rotation: rotation(entry.rotation),
           crop
         });
       } catch (error) {
@@ -417,7 +423,7 @@
       DESIGN.width, DESIGN.height,
       state.records, state.currentRecord, state.selectedField, state.exportQuality,
       state.fields,
-      state.images.map((item) => [item.id, item.name, item.x, item.y, item.width, item.height, item.opacity, item.crop, (item.sourceSrc || "").length]),
+      state.images.map((item) => [item.id, item.name, item.x, item.y, item.width, item.height, item.opacity, rotation(item.rotation), item.crop, (item.sourceSrc || "").length]),
       state.backgroundName, (state.backgroundSourceSrc || "").length, state.backgroundCrop,
       state.customFonts.map((font) => font.family)
     ]);

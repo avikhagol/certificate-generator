@@ -22,8 +22,8 @@
     field("date", "Awarded on {{date}}", 280, 576, 640, 21, 400, "Arial", "#657087", "center")
   ];
 
-  function field(id, text, x, y, width, size, weight, font, color, align) {
-    return { id, text, x, y, width, size, weight, font, color, align };
+  function field(id, text, x, y, width, size, weight, font, color, align, rotation = 0) {
+    return { id, text, x, y, width, size, weight, font, color, align, rotation: normalizeRotation(rotation) };
   }
 
   const state = {
@@ -52,8 +52,8 @@
     previousRecord: $("previousRecord"), nextRecord: $("nextRecord"), sampleData: $("sampleDataButton"),
     fieldList: $("fieldList"), addField: $("addFieldButton"), deleteField: $("deleteFieldButton"), selectedLayerLabel: $("selectedLayerLabel"),
     fieldForm: $("fieldForm"), fieldText: $("fieldText"), fieldFont: $("fieldFont"), fontStatus: $("fontStatus"), fieldSize: $("fieldSize"), fieldWeight: $("fieldWeight"), fieldColor: $("fieldColor"), fieldColorText: $("fieldColorText"),
-    fieldX: $("fieldX"), fieldY: $("fieldY"), fieldWidth: $("fieldWidth"), alignment: $("alignmentControl"),
-    imageForm: $("imageForm"), imageLayerPreview: $("imageLayerPreview"), imageX: $("imageX"), imageY: $("imageY"), imageWidth: $("imageWidth"), imageOpacity: $("imageOpacity"), imageOpacityValue: $("imageOpacityValue"),
+    fieldX: $("fieldX"), fieldY: $("fieldY"), fieldWidth: $("fieldWidth"), fieldRotation: $("fieldRotation"), alignment: $("alignmentControl"),
+    imageForm: $("imageForm"), imageLayerPreview: $("imageLayerPreview"), imageX: $("imageX"), imageY: $("imageY"), imageWidth: $("imageWidth"), imageRotation: $("imageRotation"), imageOpacity: $("imageOpacity"), imageOpacityValue: $("imageOpacityValue"),
     zoomLabel: $("zoomLabel"), exportQuality: $("exportQuality"), exportSummary: $("exportSummary"), reset: $("resetButton"), downloadPng: $("downloadPngButton"), downloadPdf: $("downloadPdfButton"), batch: $("batchButton"),
     toast: $("toast"), progress: $("progressOverlay"), progressTitle: $("progressTitle"), progressText: $("progressText"), progressBar: $("progressBar"),
     cropDialog: $("cropDialog"), cropDialogTitle: $("cropDialogTitle"), cropCanvas: $("cropCanvas"), cropAspect: $("cropAspect"), cropX: $("cropX"), cropY: $("cropY"), cropWidth: $("cropWidth"), cropHeight: $("cropHeight"), cropReset: $("cropResetButton"), cropApply: $("cropApplyButton")
@@ -61,7 +61,44 @@
 
   const bgCtx = els.background.getContext("2d");
   const cropCtx = els.cropCanvas.getContext("2d");
+  // Offscreen context used only to measure text, so the pivot a rotated text
+  // layer turns around is identical in the DOM preview and the canvas export.
+  const measureCtx = document.createElement("canvas").getContext("2d");
+  const ROTATE_HANDLE_GAP = 30; // px the rotate handle needs above a layer
   let toastTimer;
+
+  /** Fold any angle into [-180, 180) so the number input never runs away. */
+  function normalizeRotation(value) {
+    const degrees = Number(value);
+    if (!Number.isFinite(degrees)) return 0;
+    return Math.round((((degrees % 360) + 540) % 360 - 180) * 10) / 10;
+  }
+
+  /** Height of the wrapped text block, using the same wrap as the export. */
+  function textBlockHeight(item, text) {
+    measureCtx.font = `${item.weight} ${item.size}px "${item.font}"`;
+    const lines = wrapText(measureCtx, text, item.width);
+    return Math.max(1, lines.length) * item.size * 1.12;
+  }
+
+  /** Half-height of a layer: the vertical offset of its rotation pivot. */
+  function pivotOffsetY(item, isImage, text) {
+    if (isImage) return item.height / 2;
+    const record = state.records[state.currentRecord] || {};
+    return textBlockHeight(item, text ?? resolveText(item.text, record)) / 2;
+  }
+
+  /** Design-space point a layer rotates around: the centre of its own box. */
+  function itemPivot(item, isImage) {
+    return { x: item.x + item.width / 2, y: item.y + pivotOffsetY(item, isImage) };
+  }
+
+  /** Inline CSS that turns the preview node around the very same pivot. */
+  function rotationStyle(item, offsetY) {
+    const rotation = normalizeRotation(item.rotation);
+    if (!rotation) return "";
+    return `transform:rotate(${rotation}deg);transform-origin:${item.width / 2}px ${offsetY}px;`;
+  }
 
   function clone(value) { return JSON.parse(JSON.stringify(value)); }
 
@@ -224,14 +261,11 @@
       const node = document.createElement("div");
       node.className = `canvas-field image-field${item.id === state.selectedField ? " selected" : ""}`;
       node.dataset.id = item.id;
-      node.style.cssText = `left:${item.x}px;top:${item.y}px;width:${item.width}px;height:${item.height}px;opacity:${item.opacity};`;
+      node.style.cssText = `left:${item.x}px;top:${item.y}px;width:${item.width}px;height:${item.height}px;opacity:${item.opacity};${rotationStyle(item, item.height / 2)}`;
       const image = document.createElement("img");
       image.src = item.src;
       image.alt = "";
-      const handle = document.createElement("span");
-      handle.className = "resize-handle";
-      handle.setAttribute("aria-hidden", "true");
-      node.append(image, handle);
+      node.append(image, resizeHandle(), rotateHandle(item));
       node.addEventListener("pointerdown", startFieldInteraction);
       fragment.append(node);
     });
@@ -239,18 +273,35 @@
       const node = document.createElement("div");
       node.className = `canvas-field${item.id === state.selectedField ? " selected" : ""}`;
       node.dataset.id = item.id;
-      node.style.cssText = `left:${item.x}px;top:${item.y}px;width:${item.width}px;font:${item.weight} ${item.size}px/${1.12} "${item.font}";color:${item.color};text-align:${item.align};justify-content:${alignToFlex(item.align)};`;
+      const resolved = resolveText(item.text, record);
+      node.style.cssText = `left:${item.x}px;top:${item.y}px;width:${item.width}px;font:${item.weight} ${item.size}px/${1.12} "${item.font}";color:${item.color};text-align:${item.align};justify-content:${alignToFlex(item.align)};${rotationStyle(item, pivotOffsetY(item, false, resolved))}`;
       const text = document.createElement("span");
       text.style.width = "100%";
-      text.textContent = resolveText(item.text, record);
-      const handle = document.createElement("span");
-      handle.className = "resize-handle";
-      handle.setAttribute("aria-hidden", "true");
-      node.append(text, handle);
+      text.textContent = resolved;
+      node.append(text, resizeHandle(), rotateHandle(item));
       node.addEventListener("pointerdown", startFieldInteraction);
       fragment.append(node);
     });
     els.fieldLayer.replaceChildren(fragment);
+  }
+
+  function resizeHandle() {
+    const handle = document.createElement("span");
+    handle.className = "resize-handle";
+    handle.setAttribute("aria-hidden", "true");
+    return handle;
+  }
+
+  /**
+   * The stage clips overflow, so a handle sitting above a layer near the top
+   * edge would be unreachable. Flip it under the layer in that case.
+   */
+  function rotateHandle(item) {
+    const handle = document.createElement("span");
+    handle.className = item.y < ROTATE_HANDLE_GAP ? "rotate-handle below" : "rotate-handle";
+    handle.title = "Drag to rotate · hold Shift to snap to 15°";
+    handle.setAttribute("aria-hidden", "true");
+    return handle;
   }
 
   function alignToFlex(align) { return align === "left" ? "flex-start" : align === "right" ? "flex-end" : "center"; }
@@ -269,7 +320,9 @@
       const icon = document.createElement("span"); icon.className = "layer-icon"; icon.textContent = type === "image" ? "▧" : "T";
       const copy = document.createElement("span"); copy.className = "layer-copy";
       const title = document.createElement("strong"); title.textContent = type === "image" ? item.name : displayFieldName(item, index);
-      const subtitle = document.createElement("span"); subtitle.textContent = type === "image" ? `${Math.round(item.width)} × ${Math.round(item.height)} px` : item.text.replace(/\n/g, " ");
+      const base = type === "image" ? `${Math.round(item.width)} × ${Math.round(item.height)} px` : item.text.replace(/\n/g, " ");
+      const angle = normalizeRotation(item.rotation);
+      const subtitle = document.createElement("span"); subtitle.textContent = angle ? `${base} · ${angle}°` : base;
       copy.append(title, subtitle); button.append(icon, copy);
       button.addEventListener("click", () => selectField(item.id));
       return button;
@@ -299,6 +352,7 @@
       els.fieldX.value = Math.round(textItem.x);
       els.fieldY.value = Math.round(textItem.y);
       els.fieldWidth.value = Math.round(textItem.width);
+      els.fieldRotation.value = normalizeRotation(textItem.rotation);
       els.alignment.querySelectorAll("button").forEach((button) => button.classList.toggle("active", button.dataset.align === textItem.align));
     }
     if (imageItem) {
@@ -306,6 +360,7 @@
       els.imageX.value = Math.round(imageItem.x);
       els.imageY.value = Math.round(imageItem.y);
       els.imageWidth.value = Math.round(imageItem.width);
+      els.imageRotation.value = normalizeRotation(imageItem.rotation);
       els.imageOpacity.value = Math.round(imageItem.opacity * 100);
       els.imageOpacityValue.textContent = `${Math.round(imageItem.opacity * 100)}%`;
     }
@@ -355,10 +410,23 @@
     const item = getSelectedItem();
     const isImage = Boolean(getSelectedImage());
     const resizing = event.target.classList.contains("resize-handle");
+    const rotating = event.target.classList.contains("rotate-handle");
     state.interaction = {
-      id, isImage, resizing, pointerId: event.pointerId, startX: event.clientX, startY: event.clientY,
-      x: item.x, y: item.y, width: item.width, height: item.height, size: item.size
+      id, isImage, resizing, rotating, pointerId: event.pointerId, startX: event.clientX, startY: event.clientY,
+      x: item.x, y: item.y, width: item.width, height: item.height, size: item.size,
+      rotation: normalizeRotation(item.rotation)
     };
+    if (rotating) {
+      // Anchor the drag to the layer's own pivot, in client coordinates, so the
+      // angle follows the pointer no matter how the stage is zoomed.
+      const pivot = itemPivot(item, isImage);
+      const stageRect = els.stage.getBoundingClientRect();
+      const pivotX = stageRect.left + pivot.x * state.scale;
+      const pivotY = stageRect.top + pivot.y * state.scale;
+      state.interaction.pivotX = pivotX;
+      state.interaction.pivotY = pivotY;
+      state.interaction.startAngle = Math.atan2(event.clientY - pivotY, event.clientX - pivotX);
+    }
     event.currentTarget.setPointerCapture(event.pointerId);
     event.preventDefault();
   }
@@ -369,15 +437,26 @@
     const item = state.fields.find((candidate) => candidate.id === action.id) || state.images.find((candidate) => candidate.id === action.id);
     const dx = (event.clientX - action.startX) / state.scale;
     const dy = (event.clientY - action.startY) / state.scale;
-    if (action.resizing) {
+    if (action.rotating) {
+      const angle = Math.atan2(event.clientY - action.pivotY, event.clientX - action.pivotX);
+      const degrees = action.rotation + (angle - action.startAngle) * 180 / Math.PI;
+      item.rotation = normalizeRotation(event.shiftKey ? Math.round(degrees / 15) * 15 : degrees);
+    } else if (action.resizing) {
+      // Resize along the layer's own axes, so a rotated layer grows the way it
+      // looks like it should rather than along the screen axes.
+      const radians = action.rotation * Math.PI / 180;
+      const cos = Math.cos(radians);
+      const sin = Math.sin(radians);
+      const localDx = dx * cos + dy * sin;
+      const localDy = -dx * sin + dy * cos;
       if (action.isImage) {
         const aspect = action.width / action.height;
         const maxWidth = Math.min(DESIGN.width - item.x, (DESIGN.height - item.y) * aspect);
-        item.width = clamp(action.width + dx, 40, maxWidth);
+        item.width = clamp(action.width + localDx, 40, maxWidth);
         item.height = item.width / aspect;
       } else {
-        item.width = clamp(action.width + dx, 80, DESIGN.width - item.x);
-        item.size = clamp(action.size + dy * 0.18, 12, 180);
+        item.width = clamp(action.width + localDx, 80, DESIGN.width - item.x);
+        item.size = clamp(action.size + localDy * 0.18, 12, 180);
       }
     } else {
       item.x = clamp(action.x + dx, 0, DESIGN.width - item.width);
@@ -477,7 +556,7 @@
         id: `image-${Date.now()}-${state.images.length}`,
         name: file.name.replace(/\.[^.]+$/, "") || `Picture ${state.images.length + 1}`,
         src, image, sourceSrc: src, sourceImage: image, x: (DESIGN.width - width) / 2, y: (DESIGN.height - height) / 2,
-        width, height, opacity: 1, crop: null
+        width, height, opacity: 1, rotation: 0, crop: null
       };
       state.images.push(item);
       selectField(item.id);
@@ -793,6 +872,7 @@
     state.images.forEach((item) => {
       ctx.save();
       ctx.globalAlpha = item.opacity;
+      applyRotation(ctx, item, item.x + item.width / 2, item.y + item.height / 2);
       ctx.drawImage(item.image, item.x, item.y, item.width, item.height);
       ctx.restore();
     });
@@ -809,8 +889,18 @@
     const anchorX = item.align === "left" ? item.x : item.align === "right" ? item.x + item.width : item.x + item.width / 2;
     const lines = wrapText(ctx, text, item.width);
     const lineHeight = item.size * 1.12;
+    applyRotation(ctx, item, item.x + item.width / 2, item.y + (lines.length * lineHeight) / 2);
     lines.forEach((line, index) => ctx.fillText(line, anchorX, item.y + index * lineHeight));
     ctx.restore();
+  }
+
+  /** Turn the context around a design-space pivot. Caller owns save/restore. */
+  function applyRotation(ctx, item, pivotX, pivotY) {
+    const rotation = normalizeRotation(item.rotation);
+    if (!rotation) return;
+    ctx.translate(pivotX, pivotY);
+    ctx.rotate(rotation * Math.PI / 180);
+    ctx.translate(-pivotX, -pivotY);
   }
 
   function wrapText(ctx, text, maxWidth) {
@@ -1029,6 +1119,7 @@
   els.fieldX.addEventListener("input", (event) => updateSelected("x", clamp(Number(event.target.value) || 0, 0, DESIGN.width)));
   els.fieldY.addEventListener("input", (event) => updateSelected("y", clamp(Number(event.target.value) || 0, 0, DESIGN.height)));
   els.fieldWidth.addEventListener("input", (event) => updateSelected("width", clamp(Number(event.target.value) || 80, 80, DESIGN.width)));
+  els.fieldRotation.addEventListener("input", (event) => updateSelected("rotation", normalizeRotation(event.target.value)));
   els.imageX.addEventListener("input", (event) => updateSelected("x", clamp(Number(event.target.value) || 0, 0, DESIGN.width)));
   els.imageY.addEventListener("input", (event) => updateSelected("y", clamp(Number(event.target.value) || 0, 0, DESIGN.height)));
   els.imageWidth.addEventListener("input", (event) => {
@@ -1040,6 +1131,7 @@
     item.height = item.width * ratio;
     renderFields(); renderFieldList(); populateForm();
   });
+  els.imageRotation.addEventListener("input", (event) => updateSelected("rotation", normalizeRotation(event.target.value)));
   els.imageOpacity.addEventListener("input", (event) => {
     const value = clamp(Number(event.target.value) || 100, 10, 100);
     els.imageOpacityValue.textContent = `${value}%`;
@@ -1107,7 +1199,8 @@
         properties: {
           text: { type: "string", minLength: 1 }, x: { type: "number", minimum: 0, maximum: 1120 }, y: { type: "number", minimum: 0, maximum: 820 },
           width: { type: "number", minimum: 80, maximum: 1200 }, size: { type: "number", minimum: 12, maximum: 180 }, color: { type: "string", pattern: "^#[0-9a-fA-F]{6}$" },
-          align: { type: "string", enum: ["left", "center", "right"] }
+          align: { type: "string", enum: ["left", "center", "right"] },
+          rotation: { type: "number", minimum: -180, maximum: 180 }
         },
         required: ["text"], additionalProperties: false
       },
@@ -1115,7 +1208,7 @@
       execute(input) {
         if (!input || typeof input.text !== "string" || !input.text.trim()) throw new Error("text is required");
         const id = `agent-text-${Date.now()}`;
-        state.fields.push(field(id, input.text, input.x ?? 300, input.y ?? 300, input.width ?? 600, input.size ?? 32, 400, "Georgia", input.color ?? "#17223b", input.align ?? "center"));
+        state.fields.push(field(id, input.text, input.x ?? 300, input.y ?? 300, input.width ?? 600, input.size ?? 32, 400, "Georgia", input.color ?? "#17223b", input.align ?? "center", input.rotation ?? 0));
         selectField(id);
         return { id, fieldCount: state.fields.length };
       }

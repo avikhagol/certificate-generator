@@ -42,7 +42,7 @@ GitHub strips `<iframe>` from READMEs, so the image above links to the video. Th
 - Multiple independently movable, resizable, replaceable, and croppable picture layers
 - Fixed text and variable placeholder fields
 - Local custom font uploads (`.ttf`, `.otf`, `.woff`, and `.woff2`)
-- Drag, resize, nudge, style, align, add, and delete text and picture layers
+- Drag, resize, rotate, nudge, style, align, add, and delete text and picture layers
 - Live preview for every record
 - Selectable Normal, High, and XHigh PNG and landscape A4 PDF export quality
 - Batch ZIP with high-resolution PNG and PDF folders
@@ -72,7 +72,7 @@ Custom fonts are restored automatically when you load a saved project or accept 
 
 ## Saving and loading projects
 
-Use **Save project** in the top toolbar to download the whole design as a single self-contained `*.certproj.json` file: all text layers, picture layers, the background image and its crop, canvas dimensions, recipient records, export quality, and every uploaded font file. Images and fonts are embedded as base64, so the file needs no companion assets and can be emailed, archived, or shared.
+Use **Save project** in the top toolbar to download the whole design as a single self-contained `*.certproj.json` file: all text layers, picture layers, their rotation angles, the background image and its crop, canvas dimensions, recipient records, export quality, and every uploaded font file. Images and fonts are embedded as base64, so the file needs no companion assets and can be emailed, archived, or shared.
 
 Use **Load project** to reopen such a file. Images are rebuilt and custom fonts are re-registered, so the live preview and every export match what was saved. Files that are not valid projects, or that were written by a newer schema version, are rejected with an explanatory message and leave the current design untouched.
 
@@ -89,6 +89,16 @@ The working design is autosaved to IndexedDB in this browser every few seconds a
 Uploading a background changes the certificate canvas to the image's exact pixel dimensions. Use **Crop background** to choose only the area you need; the certificate then adopts the cropped image's exact dimensions and aspect ratio. Existing text and picture positions are scaled proportionally so the layout stays aligned.
 
 Use **Add picture** to place logos, signatures, portraits, seals, or other artwork above the background. You can add multiple pictures, then crop, move, resize, adjust opacity, replace, or delete each layer independently. The crop editor supports freeform, square, 4:3, 16:9, and current-certificate aspect ratios. Picture layers are included in PNG, PDF, and ZIP exports and never leave the browser.
+
+## Rotation
+
+Every text and picture layer carries its own rotation angle. Select a layer and either drag the round handle that appears above it or type an angle into the **Rotation** field in the sidebar. Hold **Shift** while dragging to snap to 15° steps. Angles are stored in degrees and folded into the range −180° to 180°, so 200° and −160° are the same value.
+
+A layer turns around the centre of its own box: for a picture that is the centre of the image, and for a text layer it is the horizontal centre of the field and the vertical middle of the wrapped text block. The preview and the exported PNG, PDF, and ZIP use exactly the same pivot, so what you see on screen is what is rendered.
+
+Two consequences are worth knowing. Because a text layer's pivot depends on how many lines the text wraps to, a rotated field whose text wraps to a different number of lines for a different recipient will pivot around a correspondingly different point — the block stays centred on itself in each case. And because X, Y, and Width still describe the *unrotated* box, a rotated layer can extend past the canvas edge; it is clipped identically in the preview and in exports.
+
+Rotation is stored in `.certproj.json` files. Project files written before this feature load fine and their layers simply start at 0°.
 
 ## Export quality
 
