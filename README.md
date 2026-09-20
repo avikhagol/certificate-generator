@@ -1,10 +1,38 @@
-# Certificate generator
+# Certificate Generator
 
-A fully static, browser-based certificate generator. Upload recipient data, customize text layers on a live certificate canvas, and export individual PNG/PDF files or a ZIP containing the full batch.
+**Turn a CSV into hundreds of certificates — PNG and PDF — without uploading anything.**
 
-If Certiforge is useful to you, [star the repository on GitHub](https://github.com/avikhagol/certificate-generator) to follow updates and support the project.
+[**▶ Open the app**](https://avikhagol.github.io/certificate-generator/) · [Watch the demo](https://www.youtube.com/watch?v=e_CAPwU1Hbw) · MIT licensed
 
-No recipient data or uploaded artwork leaves the browser. The app has no backend and no runtime dependencies.
+[![Certificate Generator — CSV to certificates in one click](dist/assets/social-preview.png)](https://www.youtube.com/watch?v=e_CAPwU1Hbw)
+
+A fully static, browser-based certificate generator. Upload recipient data, customize text and picture layers on a live certificate canvas, and export individual PNG/PDF files or a ZIP containing the full batch.
+
+## Why this one
+
+| | |
+| --- | --- |
+| **Zero dependencies** | No npm packages, no CDN scripts, no frameworks. The ZIP writer and the PDF writer are hand-written in plain JavaScript. |
+| **Zero build step** | What you see in `dist/` is what ships. Clone it, open `index.html`, done. |
+| **Under 100 KB of code** | The whole editor is one HTML file, one stylesheet and a handful of small scripts. |
+| **No backend, no signup, no upload** | Recipient data, background artwork and font files never leave your browser. There is no server to send them to. |
+| **Works offline** | Once the page has loaded it needs no network. Run it from a USB stick on an air-gapped machine. |
+| **Agent-ready** | Registers [WebMCP](https://github.com/webmachinelearning/webmcp) tools, so an AI browser agent can drive the editor and generate a batch for you. |
+| **MIT licensed** | Fork it, rebrand it, host it for your own institution. |
+
+Check the claims yourself: there is no `package.json` anywhere in this repository, and `dist/index.html` loads nothing but its own relative `assets/`.
+
+If Certificate Generator is useful to you, [star the repository](https://github.com/avikhagol/certificate-generator) to follow updates and support the project.
+
+## Demo
+
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=e_CAPwU1Hbw">
+    <img src="dist/assets/social-preview.png" alt="Generate batch certificates online for free — CSV to PNG and PDF" width="640">
+  </a>
+</p>
+
+GitHub strips `<iframe>` from READMEs, so the image above links to the video. The app page itself has a click-to-play embed.
 
 ## Features
 
@@ -91,7 +119,9 @@ dist/
   assets/
     app.js
     styles.css
+    social-preview.png
 .github/workflows/deploy-pages.yml
+LICENSE
 README.md
 ```
 
@@ -100,3 +130,7 @@ README.md
 Use a current version of Chrome, Edge, Firefox, or Safari. Large batches are generated in memory; for hundreds of high-resolution certificates, split the input into smaller files if the browser becomes memory-constrained.
 
 For best printed results, start with a high-resolution background. Higher export scales make text and picture layers sharper, but cannot restore detail missing from a low-resolution background image.
+
+## License
+
+[MIT](LICENSE) © Avinash Kumar
