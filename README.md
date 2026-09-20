@@ -101,7 +101,7 @@ Use **Add picture** to place logos, signatures, portraits, seals, or other artwo
 
 Shapes are stored as geometry, not pixels, and the same SVG path drives both the on-screen preview and the export, so a band or badge stays crisp at any export scale. All layer types share one stacking order; newly added layers appear on top.
 
-The layer list shows the topmost layer first. Use its **↑ / ↓** buttons or **Ctrl Shift ↑ / ↓** to move a layer one position. **Ctrl ↑** brings the selected layer to the top; **Ctrl ↓** sends it to the bottom. These shortcuts also accept Command on macOS and are ignored while editing a form field or using a dialog. Reordering is preserved in project saves, autosaves, and PNG/PDF/batch exports.
+The layer list shows the topmost layer first. Use its **↑ / ↓** buttons or **Ctrl ↑ / ↓** to move a layer one position. **Ctrl Shift ↑** brings the selected layer to the top; **Ctrl Shift ↓** sends it to the bottom. These shortcuts also accept Command on macOS and are ignored while editing a form field or using a dialog. Reordering is preserved in project saves, autosaves, and PNG/PDF/batch exports.
 
 ## Copy, paste and duplicate
 

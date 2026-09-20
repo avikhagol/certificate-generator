@@ -825,7 +825,7 @@
         button.type = "button";
         button.className = "layer-move";
         button.textContent = direction > 0 ? "↑" : "↓";
-        button.title = `Move ${label.toLowerCase()} one layer · Ctrl Shift ${label}`;
+        button.title = `Move ${label.toLowerCase()} one layer · Ctrl ${label}`;
         button.setAttribute("aria-label", `Move layer ${label.toLowerCase()}`);
         button.disabled = disabled;
         button.addEventListener("click", () => moveLayer(item.id, direction));
@@ -1151,7 +1151,7 @@
     const key = event.key.toLowerCase();
     if (!typing && getSelectedItem() && ["ArrowUp", "ArrowDown"].includes(event.key)) {
       event.preventDefault();
-      moveLayer(state.selectedField, event.key === "ArrowUp" ? 1 : -1, !event.shiftKey);
+      moveLayer(state.selectedField, event.key === "ArrowUp" ? 1 : -1, event.shiftKey);
       return;
     }
     if (key === "0") { setZoom("fit"); event.preventDefault(); return; }
